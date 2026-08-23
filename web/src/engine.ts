@@ -15,6 +15,7 @@ const R = (f: Partial<Ruleset>): Ruleset =>
 export const RULESETS: Record<string, { label: string; hint?: string; flags: Ruleset }> = {
   none:   { label: "none", hint: "mainnet consensus today", flags: R({}) },
   ctv:    { label: "CTV",                    flags: R({ ctv: true }) },
+  csfs:   { label: "CSFS",                   flags: R({ csfs: true }) },
   letter: { label: "CTV + CSFS",             flags: R({ ctv: true, csfs: true }) },
   cat:    { label: "CAT",                    flags: R({ cat: true }) },
   apo:    { label: "APO",                    flags: R({ apo: true }) },
