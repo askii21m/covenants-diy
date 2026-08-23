@@ -236,7 +236,7 @@ export function vault(): Example {
     around("c_spend", "Spending it: bind the coin, fill the witnesses, run the leaf", "blue", nodes,
       ["funding", "deposit_witness", "trigger_tx", "hot_witness", "withdraw_tx", "check"]),
   );
-  return { nodes, edges, network: "signet", ruleset: "letter", select: "hot" };
+  return { nodes, edges, network: "signet", ruleset: "ctv", select: "hot" };
 }
 
 
@@ -433,7 +433,7 @@ export function delegation(): Example {
     around("c_spend", "Months later: Bob signs, and shows the grant", "blue", nodes,
       ["unsigned", "sighash", "bob_sig", "witness", "signed", "check"]),
   );
-  return { nodes, edges, network: "signet", ruleset: "letter", select: "leaf" };
+  return { nodes, edges, network: "signet", ruleset: "csfs", select: "leaf" };
 }
 
 
