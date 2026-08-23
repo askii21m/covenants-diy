@@ -1,0 +1,4 @@
+# Apple clang has no wasm32 backend; secp256k1's C code needs homebrew LLVM.
+[env]
+CC_wasm32_unknown_unknown = "/opt/homebrew/opt/llvm/bin/clang"
+AR_wasm32_unknown_unknown = "/opt/homebrew/opt/llvm/bin/llvm-ar"

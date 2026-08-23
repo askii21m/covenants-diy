@@ -1,0 +1,17 @@
+[package]
+name = "covenants-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[features]
+wasm = ["dep:tsify", "dep:wasm-bindgen"]
+
+[dependencies]
+bitcoin = { version = "0.32", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+tsify = { version = "0.5", optional = true, default-features = false, features = ["js"] }
+wasm-bindgen = { version = "0.2", optional = true }
+
+[dev-dependencies]
+serde_json = "1"

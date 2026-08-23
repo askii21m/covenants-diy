@@ -1,0 +1,12 @@
+.DS_Store
+dist/
+node_modules/
+pkg/
+target/
+web/dist/
+web/node_modules/
+web/pkg/
+
+# wrangler local state (miniflare D1, caches)
+.wrangler/
+web/.wrangler/

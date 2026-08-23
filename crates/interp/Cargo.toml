@@ -1,0 +1,16 @@
+[package]
+name = "covenants-interp"
+version = "0.1.0"
+edition = "2021"
+license = "CC0-1.0"
+description = "Tapscript interpreter with covenant deployments, forked from rust-bitcoin-scriptexec"
+
+[dependencies]
+covenants-core = { path = "../core" }
+bitcoin = "0.32"
+lazy_static = "1.4"
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"
+bincode = "1.3"

@@ -1,0 +1,11 @@
+name = "covenants"
+compatibility_date = "2026-01-01"
+pages_build_output_dir = "dist"
+
+# Created with: wrangler d1 create covenants
+# Schema in web/schema.sql, applied with:
+#   wrangler d1 execute covenants --remote --file=web/schema.sql
+[[d1_databases]]
+binding = "GRAPHS"
+database_name = "covenants"
+database_id = "c605e6ae-c597-413a-8386-c74f99542e92"
