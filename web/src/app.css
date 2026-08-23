@@ -58,7 +58,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .tab-x:hover{background:var(--line2);color:var(--t)}
 /* Sits on the tabs' baseline: same height and the same 1px drop, so its
    centre lines up with theirs rather than with the strip's. */
-.tab-add{flex:none;display:flex;align-items:center;justify-content:center;border:0;background:none;color:var(--t3);font-size:17px;line-height:1;width:22px;height:29px;border-radius:var(--r-s);cursor:pointer;margin-left:0;align-self:flex-end}
+.tab-add{flex:none;display:flex;align-items:center;justify-content:center;border:0;background:none;color:var(--t3);font-size:18px;line-height:1;width:18px;height:18px;border-radius:var(--r-s);cursor:pointer;margin-left:3px;align-self:center}
 .tab-add:hover{background:var(--canvas);color:var(--t)}
 .sp{flex:1}
 .sel{display:flex;flex-direction:column;justify-content:center;padding:0 16px;border-left:1px solid var(--line)}
