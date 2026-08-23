@@ -3,7 +3,8 @@
 // it moves the nodes fully inside it (the canvas does that part, because
 // it needs the other nodes). When the view is zoomed far out the title
 // scales up into a bubble so it stays readable as a landmark.
-import { memo } from "react";
+import { memo, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { NodeResizer, useViewport, type NodeProps } from "@xyflow/react";
 import { useStore, type FlowNode } from "../store";
 import { InlineName } from "./InlineName";
@@ -12,13 +13,19 @@ export const COMMENT_COLORS: Record<string, string> = {
   teal: "#0F766E", blue: "#2E5FA8", violet: "#7C6BAE", amber: "#B54708", rose: "#B42318", slate: "#5A6472", green: "#3F7D3A", ink: "#0E1116",
 };
 
-function CommentImpl({ id, data, selected }: NodeProps<FlowNode>) {
+function CommentImpl({ id, data, selected, positionAbsoluteX, positionAbsoluteY }: NodeProps<FlowNode>) {
   const setField = useStore((s) => s.setField);
   const setSize = useStore((s) => s.setNodeSize);
   const editing = useStore((s) => s.renaming === id);
   const setRenaming = useStore((s) => s.setRenaming);
   const select = useStore((s) => s.select);
   const zoom = useViewport().zoom;
+  // React Flow puts z-index -1 on a comment's wrapper so the box sits behind
+  // the nodes it frames, and that wrapper is a stacking context, so nothing
+  // inside it can rise above them. The bubble is a landmark and has to, so
+  // it is rendered into the viewport instead, as a sibling of the nodes.
+  const [layer, setLayer] = useState<HTMLElement | null>(null);
+  useEffect(() => { setLayer(document.querySelector<HTMLElement>(".react-flow__viewport")); }, []);
   const color = COMMENT_COLORS[String(data.color ?? "teal")] ?? COMMENT_COLORS.teal;
   const title = String(data.name ?? "");
   // Unreal's "Show Bubble When Zoomed": below 60% a bubble floats above
@@ -35,7 +42,10 @@ function CommentImpl({ id, data, selected }: NodeProps<FlowNode>) {
       {/* Counter-scaled so it reads at any distance, but never wider on
           screen than the box it names: two boxes side by side would
           otherwise have their labels overlap. */}
-      {bubble > 0 && <div className="cm-bubble" style={{ transform: `scale(${bubble})`, maxWidth: Number(data.width) / bubble }}>{title}</div>}
+      {bubble > 0 && layer && createPortal(
+        <div className="cm-anchor" style={{ left: positionAbsoluteX, top: positionAbsoluteY, ["--cm" as string]: color }}>
+          <div className="cm-bubble" style={{ transform: `scale(${bubble})`, maxWidth: Number(data.width) / bubble }}>{title}</div>
+        </div>, layer)}
       <div className="cm-head">
         <InlineName className="cm-title" value={title} placeholder="Comment" editing={editing}
           onStart={() => setRenaming(id)} onCommit={(v) => { if (v != null) setField(id, "name", v); setRenaming(null); }} />
