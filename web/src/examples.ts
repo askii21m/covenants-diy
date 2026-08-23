@@ -980,6 +980,159 @@ export function recursive(): Example {
   return { nodes, edges, network: "signet", ruleset: "catall", select: "covenant" };
 }
 
+
+// --- a covenant with CAT alone -----------------------------------------------
+
+/** A covenant that needs no CHECKSIGFROMSTACK.
+ *
+ *  BIP-340 verification is s*G = R + e*P. Force both R and P to the
+ *  generator, which is to say choose the secret keys k = x = 1, and it
+ *  collapses to s = 1 + e. The signature is then a function of the message
+ *  alone, so a script that can concatenate can build one: hash the message
+ *  it is willing to allow, add one, and put R in front. CHECKSIG checks
+ *  that manufactured signature against the real transaction, and the two
+ *  agree only if the message the script built is the message the
+ *  transaction makes. Nothing signs anything.
+ *
+ *  Adding one to a 32-byte number is not something Script can do. So the
+ *  spender grinds the transaction until the challenge ends in 0x01, and the
+ *  addition becomes a last byte swapped from 01 to 02. That costs about 256
+ *  tries, which is why the locktime here is 131 rather than 0. */
+export function catonly(): Example {
+  const nodes: FlowNode[] = [];
+  const DEST = p2tr("a");
+
+  // --- the constants the script is assembled from ------------------------
+  const sigTag = node("sighash_tag", "text", col(0), 0, { value: "TapSighash" });
+  const chTag = node("challenge_tag", "text", col(0), 210, { value: "BIP0340/challenge" });
+  // Secret key 1, so the public key is the generator itself. That is the
+  // whole trick: P = G, and R = G, so s = 1 + e.
+  const one = node("secret_one", "key", col(0), 420, { secret: "00".repeat(31) + "01" });
+  const payValue = node("pay_value", "le_bytes", col(0), 700, { value: 99_000, width: 8 });
+
+  const sigTagHash = node("sighash_tag_hash", "sha256", col(1), 0, {});
+  const chTagHash = node("challenge_tag_hash", "sha256", col(1), 210, {});
+  // value || length || scriptPubKey is one CTxOut, and its hash is what
+  // BIP-341 puts in the message as sha_outputs.
+  const oneOutput = node("one_output", "concat", col(1), 700, { nParts: 2, part1: "22" + DEST });
+
+  const sigPrefix = node("sighash_prefix", "concat", col(2), 0, { nParts: 2 });
+  const chPrefix = node("challenge_prefix", "concat", col(2), 210, { nParts: 4 });
+  const pinned = node("pinned_output", "sha256", col(2), 700, {});
+
+  const covenant = node("covenant", "tapscript", col(3), 0, { source: [
+    "# Rebuild the message this input signs,",
+    "# with the one output we allow pinned.",
+    "@sigtag OP_SWAP OP_CAT",
+    "@pinned OP_CAT",
+    "OP_SWAP OP_CAT OP_SHA256",
+    "# The BIP-340 challenge over it, with",
+    "# R and P both set to the generator.",
+    "@challenge OP_SWAP OP_CAT OP_SHA256",
+    "# Ground to end in 01, so s = e + 1 is",
+    "# a byte swapped, not an addition.",
+    "OP_OVER OP_1 OP_CAT OP_EQUALVERIFY",
+    "OP_2 OP_CAT",
+    "# The signature is R || s, and R is G.",
+    "@G OP_SWAP OP_CAT",
+    "@G OP_CHECKSIG",
+  ].join("\n") });
+  const coin = node("coin", "taproot", col(4), 0, { nLeaves: 1 });
+  const spend = node("spend", "template", col(5), 0, { version: 2, locktime: 131, nIn: 1, nOut: 1, in0_seq: 0xfffffffd, out0_value: 99_000, out0_spk: DEST });
+  const funding = node("funding", "outpoint", col(6), 0, { txid: "ab".repeat(32), vout: 0, value: 100_000 });
+  nodes.push(sigTag, chTag, one, payValue, sigTagHash, chTagHash, oneOutput, sigPrefix, chPrefix, pinned, covenant, coin, spend, funding);
+
+  const { lane, next: BOT } = band(nodes, 6);
+
+  // --- the message, and the three pieces the witness carries -------------
+  const PITCH = 291;
+  const eHead = node("e_head", "slice", col(10), BOT + 0 * PITCH, { offset: 0, length: 31 });
+  const head = node("head", "slice", col(10), BOT + 1 * PITCH, { offset: 0, length: 138 });
+  const tail = node("tail", "slice", col(10), BOT + 2 * PITCH, { offset: 170, length: 42 });
+  nodes.push(eHead, head, tail);
+
+  const TALL = 2 * PITCH + 235;
+  const mid = (h: number) => BOT + Math.round((TALL - h) / 2);
+  const unsigned = node("unsigned", "transaction", col(7), mid(320), { nIn: 1, nOut: 1 });
+  const message = node("message", "sighash", col(8), mid(377), { hash_type: "DEFAULT", input_index: 0, prevout_value: 100_000 });
+  const challenge = node("challenge", "concat", col(9), mid(200), { nParts: 2 });
+  const e = node("e", "sha256", col(9), mid(200) + 260, {});
+  const wit = node("witness", "witness", col(11), mid(300), { nItems: 3 });
+  const spendTx = node("spend_tx", "transaction", col(12), mid(320), { nIn: 1, nOut: 1 });
+  const run = node("check", "execute", col(13), mid(355), { input_index: 0, prevout_value: 100_000 });
+  nodes.push(unsigned, message, challenge, e, wit, spendTx, run);
+
+  const scriptBus = bus("bScript", ["covenant", "script"], 3, lane(0), [
+    { col: 8, to: ["message", "leaf"] },
+    { col: 11, to: ["witness", "script"] },
+    { col: 13, to: ["check", "script"] },
+  ]);
+  const spkBus = bus("bSpk", ["coin", "spk"], 4, lane(1), [
+    { col: 8, to: ["message", "prevout_spk"] },
+    { col: 13, to: ["check", "prevout_spk"] },
+  ]);
+  const chBus = bus("bCh", ["challenge_prefix", "hex"], 2, lane(2), [
+    { col: 9, to: ["challenge", "part0"] },
+  ]);
+  const hops = [
+    via("hTpl", ["spend", "template"], 5, 7, lane(3), ["unsigned", "template"]),
+    via("hCtrl", ["coin", "control0"], 4, 11, lane(4), ["witness", "control"]),
+    via("hTpl2", ["spend", "template"], 5, 12, lane(5), ["spend_tx", "template"]),
+  ];
+  nodes.push(...scriptBus.nodes, ...spkBus.nodes, ...chBus.nodes, ...hops.flatMap((h) => h.nodes));
+
+  const edges: Edge[] = [
+    wire("sighash_tag", "hex", "sighash_tag_hash", "data"),
+    wire("sighash_tag_hash", "hash", "sighash_prefix", "part0"),
+    wire("sighash_tag_hash", "hash", "sighash_prefix", "part1"),
+    wire("challenge_tag", "hex", "challenge_tag_hash", "data"),
+    wire("challenge_tag_hash", "hash", "challenge_prefix", "part0"),
+    wire("challenge_tag_hash", "hash", "challenge_prefix", "part1"),
+    // R and P, both the generator, both from the key whose secret is 1
+    wire("secret_one", "pubkey", "challenge_prefix", "part2"),
+    wire("secret_one", "pubkey", "challenge_prefix", "part3"),
+    wire("pay_value", "hex", "one_output", "part0"),
+    wire("one_output", "hex", "pinned_output", "data"),
+    wire("sighash_prefix", "hex", "covenant", "ref_sigtag"),
+    wire("pinned_output", "hash", "covenant", "ref_pinned"),
+    wire("challenge_prefix", "hex", "covenant", "ref_challenge"),
+    wire("secret_one", "pubkey", "covenant", "ref_G"),
+    wire("covenant", "script", "coin", "leaf0"),
+    ...scriptBus.edges, ...spkBus.edges, ...chBus.edges, ...hops.flatMap((h) => h.edges),
+    wire("funding", "outpoint", "unsigned", "prevout0"),
+    wire("funding", "value", "unsigned", "value0"),
+    wire("unsigned", "hex", "message", "tx"),
+    // the challenge the script will rebuild, and its first 31 bytes
+    wire("message", "sighash", "challenge", "part1"),
+    wire("challenge", "hex", "e", "data"),
+    wire("e", "hash", "e_head", "data"),
+    wire("message", "preimage", "head", "data"),
+    wire("message", "preimage", "tail", "data"),
+    // in the order the script pops them
+    wire("e_head", "hex", "witness", "item0"),
+    wire("tail", "hex", "witness", "item1"),
+    wire("head", "hex", "witness", "item2"),
+    wire("witness", "witness", "spend_tx", "witness0"),
+    wire("witness", "witness", "check", "witness"),
+    wire("funding", "outpoint", "spend_tx", "prevout0"),
+    wire("funding", "value", "spend_tx", "value0"),
+    wire("spend_tx", "hex", "check", "tx"),
+  ];
+
+  nodes.unshift(
+    around("c_const", "Two tags and a key whose secret is 1", "slate", nodes,
+      ["sighash_tag", "challenge_tag", "secret_one", "sighash_tag_hash", "challenge_tag_hash", "sighash_prefix", "challenge_prefix"]),
+    around("c_pin", "The only output it will accept", "amber", nodes,
+      ["pay_value", "one_output", "pinned_output"]),
+    around("c_cov", "No CSFS anywhere", "rose", nodes, ["covenant", "coin", "spend"]),
+    around("c_funded", "Paid in", "slate", nodes, ["funding"]),
+    around("c_msg", "The message, and the challenge over it", "blue", nodes, ["unsigned", "message", "challenge", "e"]),
+    around("c_pieces", "Three pieces", "amber", nodes, ["e_head", "head", "tail"]),
+    around("c_back", "Put back together", "green", nodes, ["witness", "spend_tx", "check"]),
+  );
+  return { nodes, edges, network: "signet", ruleset: "cat", select: "covenant" };
+}
+
 export interface ExampleEntry {
   /** Shown in the menu. */
   label: string;
@@ -1000,7 +1153,7 @@ export const EXAMPLE_GROUPS: Array<{ title: string; keys: string[] }> = [
   { title: "CTV · commit to the next transaction", keys: ["vault", "pool"] },
   { title: "CSFS · check a signature over a message", keys: ["delegation", "oracle"] },
   { title: "Rebindable signatures", keys: ["bip448", "eltoo"] },
-  { title: "CAT · take bytes apart and put them back", keys: ["merkle", "recursive"] },
+  { title: "CAT · take bytes apart and put them back", keys: ["merkle", "catonly", "recursive"] },
 ];
 
 export const EXAMPLES: Record<string, ExampleEntry> = {
@@ -1011,5 +1164,6 @@ export const EXAMPLES: Record<string, ExampleEntry> = {
   bip448: { label: "Rebindable state", name: "bip448", blurb: "Three opcodes, and the update leaf is three bytes", needs: "BIP-448", build: bip448 },
   eltoo: { label: "Rebindable state, the older way", name: "eltoo", blurb: "The same channel, using an ANYPREVOUT key type", needs: "BIP-118", build: eltoo },
   merkle: { label: "Merkle proof", name: "merkle proof", blurb: "A script folds a leaf back into a root it commits to", needs: "BIP-347", build: merkle },
+  catonly: { label: "CAT-only covenant", name: "cat-only covenant", blurb: "A covenant with no CSFS, using a signature the script builds itself", needs: "BIP-347", build: catonly },
   recursive: { label: "Recursive covenant", name: "recursive covenant", blurb: "A coin that can only be spent back into itself", needs: "BIP-347 + BIP-348", build: recursive },
 };
