@@ -2,10 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../src/engine", () => import("./engine.mock"));
 import { useStore } from "../src/store";
 
-const comment = (id: string) => ({ id, type: "comment", position: { x: 0, y: 0 }, data: { kind: "comment", name: id, width: 100, height: 80 } });
+const comment = (id: string) => ({
+  id,
+  type: "comment",
+  position: { x: 0, y: 0 },
+  data: { kind: "comment", name: id, width: 100, height: 80 },
+});
 
 describe("switching documents", () => {
-  beforeEach(() => { useStore.setState({ docs: [], active: "", closed: [], nodes: [], edges: [], selected: null }); });
+  beforeEach(() => {
+    useStore.setState({ docs: [], active: "", closed: [], nodes: [], edges: [], selected: null });
+  });
 
   it("does not bring a stale selection back", () => {
     const s = useStore.getState();
@@ -37,7 +44,9 @@ describe("switching documents", () => {
 
   it("closing the active document picks its neighbour, and the last one leaves an untitled", () => {
     const s = useStore.getState();
-    const a = s.newDoc("a"), b = useStore.getState().newDoc("b"), c = useStore.getState().newDoc("c");
+    const a = s.newDoc("a"),
+      b = useStore.getState().newDoc("b"),
+      c = useStore.getState().newDoc("c");
     useStore.getState().switchDoc(a);
     useStore.getState().closeDoc(a);
     expect(useStore.getState().active).toBe(b);

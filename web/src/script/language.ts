@@ -8,8 +8,12 @@ import { wasm } from "../engine";
 import { DESCRIPTIONS, STATUS_NOTE } from "./opcodes";
 
 export interface Opcode {
-  name: string; alias?: string | null; byte: number;
-  category: string; status: string; deployment?: string | null;
+  name: string;
+  alias?: string | null;
+  byte: number;
+  category: string;
+  status: string;
+  deployment?: string | null;
   description: string;
 }
 
@@ -19,10 +23,14 @@ export function catalog(): Opcode[] {
   if (cached) return cached;
   try {
     cached = wasm.opcodes().opcodes.map((o) => ({ ...o, description: DESCRIPTIONS[o.name] ?? "" }));
-  } catch { cached = []; }
+  } catch {
+    cached = [];
+  }
   return cached;
 }
-export function statusNote(status: string): string | undefined { return STATUS_NOTE[status]; }
+export function statusNote(status: string): string | undefined {
+  return STATUS_NOTE[status];
+}
 
 let names: Map<string, Opcode> | null = null;
 /** Every spelling the assembler accepts, mapped to its opcode. */
@@ -40,20 +48,31 @@ export function byName(): Map<string, Opcode> {
 
 const WORD = /[A-Za-z0-9_]/;
 
-export const tapscript = StreamLanguage.define<{ }>({
+export const tapscript = StreamLanguage.define<{}>({
   name: "tapscript",
   token(stream) {
     if (stream.eatSpace()) return null;
-    if (stream.peek() === "#") { stream.skipToEnd(); return "comment"; }
+    if (stream.peek() === "#") {
+      stream.skipToEnd();
+      return "comment";
+    }
     if (stream.peek() === "@") {
       stream.next();
       while (stream.peek() && WORD.test(stream.peek()!)) stream.next();
       return "variableName";
     }
-    if (stream.peek() === "<") { stream.next(); while (stream.peek() && stream.peek() !== ">") stream.next(); stream.next(); return "string"; }
+    if (stream.peek() === "<") {
+      stream.next();
+      while (stream.peek() && stream.peek() !== ">") stream.next();
+      stream.next();
+      return "string";
+    }
     let word = "";
     while (stream.peek() && WORD.test(stream.peek()!)) word += stream.next();
-    if (!word) { stream.next(); return null; }
+    if (!word) {
+      stream.next();
+      return null;
+    }
     const op = byName().get(word);
     if (op) {
       if (op.status === "success" || op.status === "disallowed") return "invalid";

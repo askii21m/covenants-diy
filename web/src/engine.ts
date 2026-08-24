@@ -9,21 +9,36 @@ export const wasmReady = init();
 void wasmReady.catch(() => {});
 export { wasm };
 
-const R = (f: Partial<Ruleset>): Ruleset =>
-  ({ ctv: false, csfs: false, cat: false, apo: false, templatehash: false, internalkey: false, ...f });
+const R = (f: Partial<Ruleset>): Ruleset => ({
+  ctv: false,
+  csfs: false,
+  cat: false,
+  apo: false,
+  templatehash: false,
+  internalkey: false,
+  ...f,
+});
 
 export const RULESETS: Record<string, { label: string; hint?: string; flags: Ruleset }> = {
-  none:   { label: "none", hint: "mainnet consensus today", flags: R({}) },
-  ctv:    { label: "CTV",                    flags: R({ ctv: true }) },
-  csfs:   { label: "CSFS",                   flags: R({ csfs: true }) },
-  letter: { label: "CTV + CSFS",             flags: R({ ctv: true, csfs: true }) },
-  cat:    { label: "CAT",                    flags: R({ cat: true }) },
-  apo:    { label: "APO",                    flags: R({ apo: true }) },
+  none: { label: "none", hint: "mainnet consensus today", flags: R({}) },
+  ctv: { label: "CTV", flags: R({ ctv: true }) },
+  csfs: { label: "CSFS", flags: R({ csfs: true }) },
+  letter: { label: "CTV + CSFS", flags: R({ ctv: true, csfs: true }) },
+  cat: { label: "CAT", flags: R({ cat: true }) },
+  apo: { label: "APO", flags: R({ apo: true }) },
   // BIP-448 is exactly these three: OP_TEMPLATEHASH, CHECKSIGFROMSTACK
   // and OP_INTERNALKEY.
-  bip448: { label: "BIP-448", hint: "OP_TEMPLATEHASH + OP_CHECKSIGFROMSTACK + OP_INTERNALKEY", flags: R({ templatehash: true, csfs: true, internalkey: true }) },
-  catall: { label: "CAT + CSFS",             flags: R({ cat: true, csfs: true }) },
-  all:    { label: "everything", hint: "every proposal here at once, as inquisition runs them", flags: R({ ctv: true, csfs: true, cat: true, apo: true, templatehash: true, internalkey: true }) },
+  bip448: {
+    label: "BIP-448",
+    hint: "OP_TEMPLATEHASH + OP_CHECKSIGFROMSTACK + OP_INTERNALKEY",
+    flags: R({ templatehash: true, csfs: true, internalkey: true }),
+  },
+  catall: { label: "CAT + CSFS", flags: R({ cat: true, csfs: true }) },
+  all: {
+    label: "everything",
+    hint: "every proposal here at once, as inquisition runs them",
+    flags: R({ ctv: true, csfs: true, cat: true, apo: true, templatehash: true, internalkey: true }),
+  },
 };
 
 // Signet and regtest only. None of these covenants is deployed anywhere

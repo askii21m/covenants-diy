@@ -1,0 +1,6 @@
+pkg/
+dist/
+node_modules/
+.wrangler/
+public/fonts/
+package-lock.json

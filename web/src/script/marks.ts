@@ -73,7 +73,8 @@ export const hover = hoverTooltip((view, pos): Tooltip | null => {
   if (line.text.slice(0, offset).includes("#")) return null;
 
   const isWord = (c: string) => /[A-Za-z0-9_@]/.test(c);
-  let from = offset, to = offset;
+  let from = offset,
+    to = offset;
   while (from > 0 && isWord(line.text[from - 1])) from--;
   while (to < line.text.length && isWord(line.text[to])) to++;
   const word = line.text.slice(from, to);
@@ -83,7 +84,9 @@ export const hover = hoverTooltip((view, pos): Tooltip | null => {
     const name = word.slice(1);
     const r = view.state.field(refsField).find((x) => x.name === name);
     const body = r
-      ? (r.value ? `Carries ${r.value}` : "This port exists, but nothing is wired into it yet.")
+      ? r.value
+        ? `Carries ${r.value}`
+        : "This port exists, but nothing is wired into it yet."
       : "A new reference. Wiring appears as a port on this node once the script assembles.";
     return { pos: line.from + from, end: line.from + to, above: true, create: () => ({ dom: panel(word, body) }) };
   }
@@ -92,7 +95,16 @@ export const hover = hoverTooltip((view, pos): Tooltip | null => {
   if (!op) return null;
   const note = statusNote(op.status);
   return {
-    pos: line.from + from, end: line.from + to, above: true,
-    create: () => ({ dom: panel(`${op.name}  0x${op.byte.toString(16).padStart(2, "0")}`, op.description, note, op.status === "covenant" ? "cm-doc-note" : "cm-doc-warn") }),
+    pos: line.from + from,
+    end: line.from + to,
+    above: true,
+    create: () => ({
+      dom: panel(
+        `${op.name}  0x${op.byte.toString(16).padStart(2, "0")}`,
+        op.description,
+        note,
+        op.status === "covenant" ? "cm-doc-note" : "cm-doc-warn",
+      ),
+    }),
   };
 });

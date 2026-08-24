@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.functions.json",
     "wasm": "wasm-pack build ../crates/wasm --target web --out-dir ../../web/pkg --out-name covenants",
-    "test": "vitest run && vitest run --config vitest.node.config.ts"
+    "test": "vitest run && vitest run --config vitest.node.config.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -30,6 +32,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4",
     "jsdom": "^26.1.0",
+    "prettier": "^3.9.6",
     "typescript": "^5",
     "vite": "^6",
     "vitest": "^3.2.7",

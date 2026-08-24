@@ -14,7 +14,7 @@ import { count, type NodeFields } from "./registry";
 import type { Network } from "./engine";
 
 const p2tr = (b: string) => "5120" + b.repeat(64);
-const S = 416;              // column pitch: 288 node + 128 gap
+const S = 416; // column pitch: 288 node + 128 gap
 const col = (i: number) => i * S;
 const drop = (i: number) => col(i) + 288 + 64;
 const rise = (j: number) => col(j) - 64;
@@ -25,8 +25,22 @@ function node(id: string, kind: string, x: number, y: number, data: Record<strin
 function knot(id: string, cx: number, cy: number): FlowNode {
   return { id, type: "reroute", position: { x: cx - 16, y: cy - 16 }, data: { name: "", kind: "reroute" } };
 }
-function comment(id: string, name: string, color: string, x: number, y: number, width: number, height: number): FlowNode {
-  return { id, type: "comment", position: { x, y }, data: { name, kind: "comment", color, width, height, moveContents: true }, zIndex: -1 };
+function comment(
+  id: string,
+  name: string,
+  color: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): FlowNode {
+  return {
+    id,
+    type: "comment",
+    position: { x, y },
+    data: { name, kind: "comment", color, width, height, moveContents: true },
+    zIndex: -1,
+  };
 }
 /** A box drawn around nodes already placed, with room for its title bar. */
 function around(id: string, name: string, color: string, nodes: FlowNode[], ids: string[]): FlowNode {
@@ -37,7 +51,8 @@ function around(id: string, name: string, color: string, nodes: FlowNode[], ids:
   const y1 = Math.max(...inside.map((n) => n.position.y + height(n))) + PAD;
   return comment(id, name, color, x0, y0, x1 - x0, y1 - y0);
 }
-const PAD = 40, HEAD = 40;
+const PAD = 40,
+  HEAD = 40;
 
 // Node heights. Measured in the browser rather than derived: a layout that
 // guesses them puts nodes through the bottom of their comment box. The key
@@ -48,16 +63,35 @@ const ROW = 30;
  *  heights above. */
 const TAPSCRIPT_CHROME = 98;
 const MEASURED: Record<string, number> = {
-  "template:1:1": 296, "template:1:2": 356, "taproot:1": 284, "taproot:2": 340,
-  "transaction:1:1": 320, "transaction:1:2": 346,
-  "execute": 355, "outpoint": 235, "key": 175, "sighash": 377, "sign": 235,
-  "verify": 209, "text": 175, "concat:2": 206, "concat:3": 236, "sha256": 149, "input": 149,
-  "template_hash": 209, "slice": 235, "le_bytes": 179,
+  "template:1:1": 296,
+  "template:1:2": 356,
+  "taproot:1": 284,
+  "taproot:2": 340,
+  "transaction:1:1": 320,
+  "transaction:1:2": 346,
+  execute: 355,
+  outpoint: 235,
+  key: 175,
+  sighash: 377,
+  sign: 235,
+  verify: 209,
+  text: 175,
+  "concat:2": 206,
+  "concat:3": 236,
+  sha256: 149,
+  input: 149,
+  template_hash: 209,
+  slice: 235,
+  le_bytes: 179,
 };
 /** The shape key for a node, exported so a test can hold the table to the
  *  browser's real measurements. */
-export function shapeOf(d: Record<string, unknown>): string { return shape(d); }
-export function heightOf(n: FlowNode): number { return height(n); }
+export function shapeOf(d: Record<string, unknown>): string {
+  return shape(d);
+}
+export function heightOf(n: FlowNode): number {
+  return height(n);
+}
 function shape(d: Record<string, unknown>): string {
   const k = String(d.kind);
   if (k === "template" || k === "transaction") return `${k}:${Number(d.nIn ?? 1)}:${Number(d.nOut ?? 1)}`;
@@ -98,8 +132,16 @@ function wire(s: string, sh: string, t: string, th: string): Edge {
  *  target pin, one knot per turn. Adjacent columns get a single knot: the
  *  drop out of column i and the rise into column i+1 are the same x, and
  *  two knots there would sit exactly on top of each other. */
-function via(tag: string, src: [string, string], from: number, to: number, y: number, dst: [string, string]): { nodes: FlowNode[]; edges: Edge[]; last: string } {
-  const x1 = drop(from), x2 = rise(to);
+function via(
+  tag: string,
+  src: [string, string],
+  from: number,
+  to: number,
+  y: number,
+  dst: [string, string],
+): { nodes: FlowNode[]; edges: Edge[]; last: string } {
+  const x1 = drop(from),
+    x2 = rise(to);
   const ids = x1 === x2 ? [tag] : [`${tag}a`, `${tag}b`];
   const nodes = ids.map((id, i) => knot(id, i === 0 ? x1 : x2, y));
   return { nodes, edges: route(src, ids, dst), last: ids[ids.length - 1] };
@@ -111,7 +153,13 @@ function via(tag: string, src: [string, string], from: number, to: number, y: nu
  *  back across everything in between; a bus keeps them in the lane until
  *  they are needed. Returns the tap knots in order, so a caller can hang
  *  a second target off any of them. */
-function bus(tag: string, src: [string, string], from: number, y: number, stops: Array<{ col: number; to: [string, string] }>): { nodes: FlowNode[]; edges: Edge[]; ids: string[] } {
+function bus(
+  tag: string,
+  src: [string, string],
+  from: number,
+  y: number,
+  stops: Array<{ col: number; to: [string, string] }>,
+): { nodes: FlowNode[]; edges: Edge[]; ids: string[] } {
   const nodes: FlowNode[] = [];
   const edges: Edge[] = [];
   const ids: string[] = [];
@@ -140,14 +188,19 @@ function route(src: [string, string], knots: string[], dst: [string, string]): E
   const hops = [src, ...knots.map((k) => [k, "out"] as [string, string])];
   const out: Edge[] = [];
   hops.forEach((h, i) => {
-    const next = i + 1 < hops.length ? [hops[i + 1][0], "in"] as [string, string] : dst;
+    const next = i + 1 < hops.length ? ([hops[i + 1][0], "in"] as [string, string]) : dst;
     out.push(wire(h[0], h[1], next[0], next[1]));
   });
   return out;
 }
 
-
-export interface Example { nodes: FlowNode[]; edges: Edge[]; network: Network; ruleset: string; select?: string }
+export interface Example {
+  nodes: FlowNode[];
+  edges: Edge[];
+  network: Network;
+  ruleset: string;
+  select?: string;
+}
 
 export function vault(): Example {
   // Laid out so every wire runs one way.
@@ -166,17 +219,47 @@ export function vault(): Example {
   const spk = (b: string) => p2tr(b);
 
   // --- what the vault allows, decided before it is funded ---------------
-  const withdraw = node("withdraw", "template", col(0), 0, { version: 2, locktime: 0, nIn: 1, nOut: 1, in0_seq: 144, out0_value: 98_000, out0_spk: spk("11") });
-  const hot = node("hot", "tapscript", col(1), 0, { source: "# Wait out the delay, then take\n# only the withdrawal named here.\n144 OP_CHECKSEQUENCEVERIFY OP_DROP\n@withdraw OP_CHECKTEMPLATEVERIFY" });
-  const clawback = node("clawback", "template", col(0), 372, { version: 2, locktime: 0, nIn: 1, nOut: 1, in0_seq: 0xfffffffd, out0_value: 98_500, out0_spk: spk("22") });
-  const cold = node("cold", "tapscript", col(1), 372, { source: "# No delay. If that withdrawal was\n# not yours, move it to cold now.\n@clawback OP_CHECKTEMPLATEVERIFY" });
+  const withdraw = node("withdraw", "template", col(0), 0, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 1,
+    in0_seq: 144,
+    out0_value: 98_000,
+    out0_spk: spk("11"),
+  });
+  const hot = node("hot", "tapscript", col(1), 0, {
+    source:
+      "# Wait out the delay, then take\n# only the withdrawal named here.\n144 OP_CHECKSEQUENCEVERIFY OP_DROP\n@withdraw OP_CHECKTEMPLATEVERIFY",
+  });
+  const clawback = node("clawback", "template", col(0), 372, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 1,
+    in0_seq: 0xfffffffd,
+    out0_value: 98_500,
+    out0_spk: spk("22"),
+  });
+  const cold = node("cold", "tapscript", col(1), 372, {
+    source: "# No delay. If that withdrawal was\n# not yours, move it to cold now.\n@clawback OP_CHECKTEMPLATEVERIFY",
+  });
   // Centred between the two leaves it holds, so both wires into it are the
   // same shape and the box has no dead quarter.
   const triggerOut = node("trigger_out", "taproot", col(2), 164, { nLeaves: 2 });
 
   // --- and the deposit that can only become it --------------------------
-  const trigger = node("trigger", "template", col(3), 0, { version: 2, locktime: 0, nIn: 1, nOut: 1, in0_seq: 0xfffffffd, out0_value: 99_000 });
-  const depositLeaf = node("deposit_leaf", "tapscript", col(4), 0, { source: "# The deposit has one way out, and\n# it is the trigger above.\n@trigger OP_CHECKTEMPLATEVERIFY" });
+  const trigger = node("trigger", "template", col(3), 0, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 1,
+    in0_seq: 0xfffffffd,
+    out0_value: 99_000,
+  });
+  const depositLeaf = node("deposit_leaf", "tapscript", col(4), 0, {
+    source: "# The deposit has one way out, and\n# it is the trigger above.\n@trigger OP_CHECKTEMPLATEVERIFY",
+  });
   const deposit = node("deposit", "taproot", col(5), 0, { nLeaves: 1 });
   nodes.push(withdraw, hot, clawback, cold, triggerOut, trigger, depositLeaf, deposit);
 
@@ -229,16 +312,29 @@ export function vault(): Example {
   ];
 
   nodes.unshift(
-    around("c_ways", "Two ways out, both settled before a satoshi moves", "teal", nodes,
-      ["withdraw", "hot", "clawback", "cold", "trigger_out"]),
-    around("c_deposit", "The deposit can become the trigger and nothing else", "amber", nodes,
-      ["trigger", "deposit_leaf", "deposit"]),
-    around("c_spend", "Spending it: bind the coin, fill the witnesses, run the leaf", "blue", nodes,
-      ["funding", "deposit_witness", "trigger_tx", "hot_witness", "withdraw_tx", "check"]),
+    around("c_ways", "Two ways out, both settled before a satoshi moves", "teal", nodes, [
+      "withdraw",
+      "hot",
+      "clawback",
+      "cold",
+      "trigger_out",
+    ]),
+    around("c_deposit", "The deposit can become the trigger and nothing else", "amber", nodes, [
+      "trigger",
+      "deposit_leaf",
+      "deposit",
+    ]),
+    around("c_spend", "Spending it: bind the coin, fill the witnesses, run the leaf", "blue", nodes, [
+      "funding",
+      "deposit_witness",
+      "trigger_tx",
+      "hot_witness",
+      "withdraw_tx",
+      "check",
+    ]),
   );
   return { nodes, edges, network: "signet", ruleset: "ctv", select: "hot" };
 }
-
 
 // --- congestion control -------------------------------------------------------
 
@@ -258,11 +354,35 @@ export function pool(): Example {
   const to = (b: string) => p2tr(b);
 
   // --- what each pair is owed, agreed before anyone pays in -------------
-  const payAB = node("pay_ab", "template", col(0), 0, { version: 2, locktime: 0, nIn: 1, nOut: 2, in0_seq: 0xfffffffd, out0_value: 24_000, out0_spk: to("11"), out1_value: 24_000, out1_spk: to("22") });
-  const branchAB = node("branch_ab", "tapscript", col(1), 0, { source: "# alice and bob, whenever they ask\n@pay_ab OP_CHECKTEMPLATEVERIFY" });
+  const payAB = node("pay_ab", "template", col(0), 0, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 2,
+    in0_seq: 0xfffffffd,
+    out0_value: 24_000,
+    out0_spk: to("11"),
+    out1_value: 24_000,
+    out1_spk: to("22"),
+  });
+  const branchAB = node("branch_ab", "tapscript", col(1), 0, {
+    source: "# alice and bob, whenever they ask\n@pay_ab OP_CHECKTEMPLATEVERIFY",
+  });
   const outAB = node("out_ab", "taproot", col(2), 0, { nLeaves: 1 });
-  const payCD = node("pay_cd", "template", col(0), 412, { version: 2, locktime: 0, nIn: 1, nOut: 2, in0_seq: 0xfffffffd, out0_value: 24_000, out0_spk: to("33"), out1_value: 24_000, out1_spk: to("44") });
-  const branchCD = node("branch_cd", "tapscript", col(1), 412, { source: "# carol and dave, on their own clock\n@pay_cd OP_CHECKTEMPLATEVERIFY" });
+  const payCD = node("pay_cd", "template", col(0), 412, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 2,
+    in0_seq: 0xfffffffd,
+    out0_value: 24_000,
+    out0_spk: to("33"),
+    out1_value: 24_000,
+    out1_spk: to("44"),
+  });
+  const branchCD = node("branch_cd", "tapscript", col(1), 412, {
+    source: "# carol and dave, on their own clock\n@pay_cd OP_CHECKTEMPLATEVERIFY",
+  });
   const outCD = node("out_cd", "taproot", col(2), 412, { nLeaves: 1 });
 
   // --- one root over both branches, centred where they meet -------------
@@ -271,8 +391,18 @@ export function pool(): Example {
   // follows keeps the root's top line rather than its centre: three boxes
   // of different heights centred on one line look misaligned, not centred.
   const ROOT_Y = 348 - 178;
-  const root = node("root", "template", col(3), ROOT_Y, { version: 2, locktime: 0, nIn: 1, nOut: 2, in0_seq: 0xfffffffd, out0_value: 49_000, out1_value: 49_000 });
-  const poolLeaf = node("pool_leaf", "tapscript", col(4), ROOT_Y, { source: "# the only thing the block carries\n@root OP_CHECKTEMPLATEVERIFY" });
+  const root = node("root", "template", col(3), ROOT_Y, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 2,
+    in0_seq: 0xfffffffd,
+    out0_value: 49_000,
+    out1_value: 49_000,
+  });
+  const poolLeaf = node("pool_leaf", "tapscript", col(4), ROOT_Y, {
+    source: "# the only thing the block carries\n@root OP_CHECKTEMPLATEVERIFY",
+  });
   const pool = node("pool", "taproot", col(5), ROOT_Y, { nLeaves: 1 });
   nodes.push(payAB, branchAB, outAB, payCD, branchCD, outCD, root, poolLeaf, pool);
 
@@ -322,12 +452,23 @@ export function pool(): Example {
   ];
 
   nodes.unshift(
-    around("c_pairs", "Every payout is settled before anyone pays in", "teal", nodes,
-      ["pay_ab", "branch_ab", "out_ab", "pay_cd", "branch_cd", "out_cd"]),
-    around("c_root", "One root gathers both branches", "amber", nodes,
-      ["root", "pool_leaf", "pool"]),
-    around("c_chain", "One transaction on chain, and a branch whenever its pair asks", "blue", nodes,
-      ["funding", "pool_witness", "pool_tx", "branch_witness", "unroll_ab", "check"]),
+    around("c_pairs", "Every payout is settled before anyone pays in", "teal", nodes, [
+      "pay_ab",
+      "branch_ab",
+      "out_ab",
+      "pay_cd",
+      "branch_cd",
+      "out_cd",
+    ]),
+    around("c_root", "One root gathers both branches", "amber", nodes, ["root", "pool_leaf", "pool"]),
+    around("c_chain", "One transaction on chain, and a branch whenever its pair asks", "blue", nodes, [
+      "funding",
+      "pool_witness",
+      "pool_tx",
+      "branch_witness",
+      "unroll_ab",
+      "check",
+    ]),
   );
   return { nodes, edges, network: "signet", ruleset: "ctv", select: "pool_leaf" };
 }
@@ -352,15 +493,25 @@ export function delegation(): Example {
   const grant = node("grant", "sign", col(1), 0, { hash_type: 0 });
 
   // --- the coin it locks, and what Bob may do with it -------------------
-  const leaf = node("leaf", "tapscript", col(2), 0, { source: [
-    "# Alice can hand Bob one spend by",
-    "# signing his key, keeping her own.",
-    "@bob                # her message",
-    "@alice OP_CSFS OP_VERIFY",
-    "@bob OP_CHECKSIG    # and Bob signs",
-  ].join("\n") });
+  const leaf = node("leaf", "tapscript", col(2), 0, {
+    source: [
+      "# Alice can hand Bob one spend by",
+      "# signing his key, keeping her own.",
+      "@bob                # her message",
+      "@alice OP_CSFS OP_VERIFY",
+      "@bob OP_CHECKSIG    # and Bob signs",
+    ].join("\n"),
+  });
   const output = node("output", "taproot", col(3), 0, { nLeaves: 1 });
-  const spend = node("spend", "template", col(4), 0, { version: 2, locktime: 0, nIn: 1, nOut: 1, in0_seq: 0xfffffffd, out0_value: 99_000, out0_spk: p2tr("55") });
+  const spend = node("spend", "template", col(4), 0, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 1,
+    in0_seq: 0xfffffffd,
+    out0_value: 99_000,
+    out0_spk: p2tr("55"),
+  });
   // A column of its own, so nothing sits above it: at a distance a box's
   // label floats over whatever is there, and this one would land on the
   // template. It also puts the coin directly over the transaction that
@@ -375,7 +526,11 @@ export function delegation(): Example {
   // to the witness that carries it, so the digest is taken from the
   // unsigned one and the witness goes on afterwards.
   const unsigned = node("unsigned", "transaction", col(5), BOT, { nIn: 1, nOut: 1 });
-  const sighash = node("sighash", "sighash", col(6), BOT, { hash_type: "DEFAULT", input_index: 0, prevout_value: 100_000 });
+  const sighash = node("sighash", "sighash", col(6), BOT, {
+    hash_type: "DEFAULT",
+    input_index: 0,
+    prevout_value: 100_000,
+  });
   const bobSig = node("bob_sig", "sign", col(7), BOT, {});
   const wit = node("witness", "witness", col(8), BOT, { nItems: 2 });
   const signed = node("signed", "transaction", col(9), BOT, { nIn: 1, nOut: 1 });
@@ -423,19 +578,22 @@ export function delegation(): Example {
   ];
 
   nodes.unshift(
-    around("c_grant", "The grant: Alice signs Bob's key", "teal", nodes,
-      ["alice", "bob", "grant"]),
-    around("c_coin", "The coin, and the one spend it allows", "amber", nodes,
-      ["leaf", "output", "spend"]),
+    around("c_grant", "The grant: Alice signs Bob's key", "teal", nodes, ["alice", "bob", "grant"]),
+    around("c_coin", "The coin, and the one spend it allows", "amber", nodes, ["leaf", "output", "spend"]),
     // Its own box rather than a lonely second row inside the one above:
     // a single node under three leaves two columns of nothing.
     around("c_funded", "Paid in", "slate", nodes, ["funding"]),
-    around("c_spend", "Months later: Bob signs, and shows the grant", "blue", nodes,
-      ["unsigned", "sighash", "bob_sig", "witness", "signed", "check"]),
+    around("c_spend", "Months later: Bob signs, and shows the grant", "blue", nodes, [
+      "unsigned",
+      "sighash",
+      "bob_sig",
+      "witness",
+      "signed",
+      "check",
+    ]),
   );
   return { nodes, edges, network: "signet", ruleset: "csfs", select: "leaf" };
 }
-
 
 // --- oracle payout ------------------------------------------------------------
 
@@ -458,14 +616,24 @@ export function oracle(): Example {
   const offchain = node("offchain", "verify", col(1), 291, {});
 
   // --- the payout, decided before anyone funds the bet ------------------
-  const payout = node("payout", "template", col(2), 0, { version: 2, locktime: 0, nIn: 1, nOut: 1, in0_seq: 0xfffffffd, out0_value: 99_000, out0_spk: p2tr("66") });
-  const leaf = node("leaf", "tapscript", col(3), 0, { source: [
-    "# Fixed before funding: the oracle",
-    "# decides whether, never where.",
-    "@payout OP_CTV OP_DROP",
-    "@outcome        # what was attested",
-    "@oracle OP_CSFS # and who attested",
-  ].join("\n") });
+  const payout = node("payout", "template", col(2), 0, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 1,
+    in0_seq: 0xfffffffd,
+    out0_value: 99_000,
+    out0_spk: p2tr("66"),
+  });
+  const leaf = node("leaf", "tapscript", col(3), 0, {
+    source: [
+      "# Fixed before funding: the oracle",
+      "# decides whether, never where.",
+      "@payout OP_CTV OP_DROP",
+      "@outcome        # what was attested",
+      "@oracle OP_CSFS # and who attested",
+    ].join("\n"),
+  });
   const bet = node("bet", "taproot", col(4), 0, { nLeaves: 1 });
   const funding = node("funding", "outpoint", col(5), 0, { txid: "f".repeat(64), vout: 0, value: 100_000 });
   nodes.push(key, outcome, attest, offchain, payout, leaf, bet, funding);
@@ -510,13 +678,10 @@ export function oracle(): Example {
   ];
 
   nodes.unshift(
-    around("c_oracle", "The oracle, and its message", "amber", nodes,
-      ["oracle", "outcome", "attestation", "offchain"]),
-    around("c_bet", "The payout, fixed before the bet is funded", "teal", nodes,
-      ["payout", "leaf", "bet"]),
+    around("c_oracle", "The oracle, and its message", "amber", nodes, ["oracle", "outcome", "attestation", "offchain"]),
+    around("c_bet", "The payout, fixed before the bet is funded", "teal", nodes, ["payout", "leaf", "bet"]),
     around("c_funded", "Paid in", "slate", nodes, ["funding"]),
-    around("c_settle", "Settling: the attestation is the whole witness", "blue", nodes,
-      ["witness", "settle", "check"]),
+    around("c_settle", "Settling: the attestation is the whole witness", "blue", nodes, ["witness", "settle", "check"]),
   );
   return { nodes, edges, network: "signet", ruleset: "letter", select: "leaf" };
 }
@@ -537,14 +702,24 @@ export function eltoo(): Example {
 
   // --- the state ---------------------------------------------------------
   const shared = node("shared_key", "key", col(0), 0, { secret: "44".repeat(32) });
-  const update = node("update", "tapscript", col(1), 0, { source: [
-    "# 0x01 is BIP-118's key: the taproot",
-    "# internal key. A signature over it",
-    "# names no prevout at all.",
-    "01 OP_CHECKSIG",
-  ].join("\n") });
+  const update = node("update", "tapscript", col(1), 0, {
+    source: [
+      "# 0x01 is BIP-118's key: the taproot",
+      "# internal key. A signature over it",
+      "# names no prevout at all.",
+      "01 OP_CHECKSIG",
+    ].join("\n"),
+  });
   const state1 = node("state_1", "taproot", col(2), 0, { nLeaves: 1 });
-  const settle = node("settlement", "template", col(3), 0, { version: 2, locktime: 0, nIn: 1, nOut: 1, in0_seq: 0xfffffffd, out0_value: 99_000, out0_spk: p2tr("77") });
+  const settle = node("settlement", "template", col(3), 0, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 1,
+    in0_seq: 0xfffffffd,
+    out0_value: 99_000,
+    out0_spk: p2tr("77"),
+  });
   const channel = node("channel", "outpoint", col(4), 0, { txid: "f".repeat(64), vout: 0, value: 100_000 });
   nodes.push(shared, update, state1, settle, channel);
 
@@ -552,7 +727,11 @@ export function eltoo(): Example {
 
   // --- the update --------------------------------------------------------
   const unsigned = node("unsigned", "transaction", col(5), MID, { nIn: 1, nOut: 1 });
-  const sh = node("sighash", "sighash", col(6), MID, { hash_type: "ALL|ANYPREVOUTANYSCRIPT", input_index: 0, prevout_value: 100_000 });
+  const sh = node("sighash", "sighash", col(6), MID, {
+    hash_type: "ALL|ANYPREVOUTANYSCRIPT",
+    input_index: 0,
+    prevout_value: 100_000,
+  });
   const sig = node("update_sig", "sign", col(7), MID, {});
   const wit = node("witness", "witness", col(8), MID, { nItems: 1 });
   const state2 = node("state_2", "transaction", col(9), MID, { nIn: 1, nOut: 1 });
@@ -592,7 +771,9 @@ export function eltoo(): Example {
     wire("shared_key", "sk", "update_sig", "secret"),
     wire("update", "script", "state_1", "leaf0"),
     wire("state_1", "spk", "settlement", "out0_spk"),
-    ...leafBus.edges, ...spkBus.edges, ...hops.flatMap((h) => h.edges),
+    ...leafBus.edges,
+    ...spkBus.edges,
+    ...hops.flatMap((h) => h.edges),
     // the last tap of each bus serves the row below as well, straight down
     // the gap between columns
     wire(leafBus.ids[2], "out", "check_rebound", "script"),
@@ -619,13 +800,26 @@ export function eltoo(): Example {
   ];
 
   nodes.unshift(
-    around("c_state", "The state: one leaf, keyed 0x01", "violet", nodes,
-      ["shared_key", "update", "state_1", "settlement"]),
+    around("c_state", "The state: one leaf, keyed 0x01", "violet", nodes, [
+      "shared_key",
+      "update",
+      "state_1",
+      "settlement",
+    ]),
     around("c_open", "Paid in", "slate", nodes, ["channel"]),
-    around("c_update", "The update: ANYPREVOUTANYSCRIPT, chosen by hand", "blue", nodes,
-      ["unsigned", "sighash", "update_sig", "witness", "state_2", "check"]),
-    around("c_rebind", "The same signature, a different state", "green", nodes,
-      ["another_state", "rebound", "check_rebound"]),
+    around("c_update", "The update: ANYPREVOUTANYSCRIPT, chosen by hand", "blue", nodes, [
+      "unsigned",
+      "sighash",
+      "update_sig",
+      "witness",
+      "state_2",
+      "check",
+    ]),
+    around("c_rebind", "The same signature, a different state", "green", nodes, [
+      "another_state",
+      "rebound",
+      "check_rebound",
+    ]),
   );
   return { nodes, edges, network: "signet", ruleset: "apo", select: "update" };
 }
@@ -647,20 +841,30 @@ export function merkle(): Example {
   const hashAlice = node("hash_alice", "sha256", col(1), 0, {});
   const bobLeaf = node("bob_leaf", "text", col(0), 231, { value: "bob:50000" });
   const hashBob = node("hash_bob", "sha256", col(1), 231, {});
-  const MERGE = 190 - 103;               // halfway down the pair of hashes
+  const MERGE = 190 - 103; // halfway down the pair of hashes
   const pair = node("pair", "concat", col(2), MERGE, { nParts: 2 });
   const root = node("root", "sha256", col(3), MERGE, {});
 
   // --- and the only part of it the chain ever sees ------------------------
-  const proof = node("proof", "tapscript", col(4), MERGE, { source: [
-    "# Rebuild the root from the leaf and",
-    "# its sibling. OP_CAT joins them the",
-    "# way the tree was built.",
-    "OP_SHA256 OP_SWAP OP_CAT OP_SHA256",
-    "@root OP_EQUAL",
-  ].join("\n") });
+  const proof = node("proof", "tapscript", col(4), MERGE, {
+    source: [
+      "# Rebuild the root from the leaf and",
+      "# its sibling. OP_CAT joins them the",
+      "# way the tree was built.",
+      "OP_SHA256 OP_SWAP OP_CAT OP_SHA256",
+      "@root OP_EQUAL",
+    ].join("\n"),
+  });
   const committed = node("committed", "taproot", col(5), MERGE, { nLeaves: 1 });
-  const spend = node("spend", "template", col(6), MERGE, { version: 2, locktime: 0, nIn: 1, nOut: 1, in0_seq: 0xfffffffd, out0_value: 99_000, out0_spk: p2tr("88") });
+  const spend = node("spend", "template", col(6), MERGE, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 1,
+    in0_seq: 0xfffffffd,
+    out0_value: 99_000,
+    out0_spk: p2tr("88"),
+  });
   const funding = node("funding", "outpoint", col(7), MERGE, { txid: "f".repeat(64), vout: 0, value: 100_000 });
   nodes.push(aliceLeaf, hashAlice, bobLeaf, hashBob, pair, root, proof, committed, spend, funding);
 
@@ -699,24 +903,28 @@ export function merkle(): Example {
     wire("root", "hash", "proof", "ref_root"),
     wire("proof", "script", "committed", "leaf0"),
     wire("committed", "spk", "spend", "out0_spk"),
-    ...leafBus.edges, ...hops.flatMap((h) => h.edges),
+    ...leafBus.edges,
+    ...hops.flatMap((h) => h.edges),
     wire("witness", "witness", "claim", "witness0"),
     wire("witness", "witness", "check", "witness"),
     wire("claim", "hex", "check", "tx"),
   ];
 
   nodes.unshift(
-    around("c_tree", "The tree, built in the open", "teal", nodes,
-      ["alice_leaf", "hash_alice", "bob_leaf", "hash_bob", "pair", "root"]),
-    around("c_committed", "Only the root is committed", "amber", nodes,
-      ["proof", "committed", "spend"]),
+    around("c_tree", "The tree, built in the open", "teal", nodes, [
+      "alice_leaf",
+      "hash_alice",
+      "bob_leaf",
+      "hash_bob",
+      "pair",
+      "root",
+    ]),
+    around("c_committed", "Only the root is committed", "amber", nodes, ["proof", "committed", "spend"]),
     around("c_funded", "Paid in", "slate", nodes, ["funding"]),
-    around("c_claim", "The claim: her leaf and his hash", "blue", nodes,
-      ["witness", "claim", "check"]),
+    around("c_claim", "The claim: her leaf and his hash", "blue", nodes, ["witness", "claim", "check"]),
   );
   return { nodes, edges, network: "signet", ruleset: "cat", select: "proof" };
 }
-
 
 // --- BIP-448 -----------------------------------------------------------------
 
@@ -735,15 +943,25 @@ export function bip448(): Example {
 
   // --- the state ---------------------------------------------------------
   const shared = node("shared_key", "key", col(0), 0, { secret: "44".repeat(32) });
-  const update = node("update", "tapscript", col(1), 0, { source: [
-    "# TEMPLATEHASH names the spend,",
-    "# INTERNALKEY names the key, and",
-    "# CSFS checks one signature over both.",
-    "OP_TEMPLATEHASH OP_INTERNALKEY",
-    "OP_CHECKSIGFROMSTACK",
-  ].join("\n") });
+  const update = node("update", "tapscript", col(1), 0, {
+    source: [
+      "# TEMPLATEHASH names the spend,",
+      "# INTERNALKEY names the key, and",
+      "# CSFS checks one signature over both.",
+      "OP_TEMPLATEHASH OP_INTERNALKEY",
+      "OP_CHECKSIGFROMSTACK",
+    ].join("\n"),
+  });
   const state1 = node("state_1", "taproot", col(2), 0, { nLeaves: 1 });
-  const settle = node("settlement", "template", col(3), 0, { version: 2, locktime: 0, nIn: 1, nOut: 1, in0_seq: 0xfffffffd, out0_value: 99_000, out0_spk: p2tr("99") });
+  const settle = node("settlement", "template", col(3), 0, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 1,
+    in0_seq: 0xfffffffd,
+    out0_value: 99_000,
+    out0_spk: p2tr("99"),
+  });
   const channel = node("channel", "outpoint", col(4), 0, { txid: "f".repeat(64), vout: 0, value: 100_000 });
   nodes.push(shared, update, state1, settle, channel);
 
@@ -776,9 +994,7 @@ export function bip448(): Example {
     { col: 8, to: ["witness", "script"] },
     { col: 10, to: ["check", "script"] },
   ]);
-  const spkBus = bus("bSpk", ["state_1", "spk"], 2, lane(7), [
-    { col: 10, to: ["check", "prevout_spk"] },
-  ]);
+  const spkBus = bus("bSpk", ["state_1", "spk"], 2, lane(7), [{ col: 10, to: ["check", "prevout_spk"] }]);
   const hops = [
     via("hTpl", ["settlement", "template"], 3, 5, lane(0), ["unsigned", "template"]),
     via("hKey", ["shared_key", "sk"], 0, 7, lane(1), ["update_sig", "secret"]),
@@ -793,7 +1009,9 @@ export function bip448(): Example {
     wire("shared_key", "pubkey", "state_1", "internal_key"),
     wire("update", "script", "state_1", "leaf0"),
     wire("state_1", "spk", "settlement", "out0_spk"),
-    ...leafBus.edges, ...spkBus.edges, ...hops.flatMap((h) => h.edges),
+    ...leafBus.edges,
+    ...spkBus.edges,
+    ...hops.flatMap((h) => h.edges),
     // the last tap of each bus serves the row below as well, straight down
     // the gap between columns
     wire(leafBus.ids[1], "out", "check_rebound", "script"),
@@ -819,17 +1037,24 @@ export function bip448(): Example {
   ];
 
   nodes.unshift(
-    around("c_state", "The state: three opcodes", "violet", nodes,
-      ["shared_key", "update", "state_1", "settlement"]),
+    around("c_state", "The state: three opcodes", "violet", nodes, ["shared_key", "update", "state_1", "settlement"]),
     around("c_open", "Paid in", "slate", nodes, ["channel"]),
-    around("c_update", "The update: one signature over a hash that names no coin", "blue", nodes,
-      ["unsigned", "template_hash", "update_sig", "witness", "state_2", "check"]),
-    around("c_rebind", "The same signature, a different coin", "green", nodes,
-      ["another_coin", "rebound", "check_rebound"]),
+    around("c_update", "The update: one signature over a hash that names no coin", "blue", nodes, [
+      "unsigned",
+      "template_hash",
+      "update_sig",
+      "witness",
+      "state_2",
+      "check",
+    ]),
+    around("c_rebind", "The same signature, a different coin", "green", nodes, [
+      "another_coin",
+      "rebound",
+      "check_rebound",
+    ]),
   );
   return { nodes, edges, network: "signet", ruleset: "bip448", select: "update" };
 }
-
 
 // --- recursive covenant with OP_CAT ------------------------------------------
 
@@ -865,42 +1090,51 @@ export function recursive(): Example {
   const tagPrefix = node("tag_prefix", "concat", col(2), 0, { nParts: 2 });
 
   // --- the covenant ------------------------------------------------------
-  const covenant = node("covenant", "tapscript", col(3), 0, { source: [
-    "# Rebuild the message this signature",
-    "# signs, from the witness pieces.",
-    "OP_TOALTSTACK          # tail",
-    "# The spk is kept twice over: once as",
-    "# the output we pay to, once as the",
-    "# input we spend. That is the loop.",
-    "OP_DUP OP_TOALTSTACK",
-    "OP_SWAP OP_TOALTSTACK  # middle",
-    "# Bytes 10 to 41 of the message are",
-    "# the outputs hash. The script works",
-    "# it out rather than be handed it.",
-    "OP_CAT OP_SHA256",
-    "OP_CAT",
-    "OP_FROMALTSTACK OP_CAT",
-    "OP_FROMALTSTACK OP_CAT",
-    "OP_FROMALTSTACK OP_CAT",
-    "@tag OP_SWAP OP_CAT OP_SHA256",
-    "# One signature, checked twice:",
-    "# against what we built, and against",
-    "# the real one. Both pass only if",
-    "# they are the same bytes.",
-    "OP_2DUP @key OP_CSFS OP_VERIFY",
-    "OP_DROP",
-    "OP_1NEGATE OP_CAT      # 0x81",
-    "@key OP_CHECKSIG",
-  ].join("\n") });
+  const covenant = node("covenant", "tapscript", col(3), 0, {
+    source: [
+      "# Rebuild the message this signature",
+      "# signs, from the witness pieces.",
+      "OP_TOALTSTACK          # tail",
+      "# The spk is kept twice over: once as",
+      "# the output we pay to, once as the",
+      "# input we spend. That is the loop.",
+      "OP_DUP OP_TOALTSTACK",
+      "OP_SWAP OP_TOALTSTACK  # middle",
+      "# Bytes 10 to 41 of the message are",
+      "# the outputs hash. The script works",
+      "# it out rather than be handed it.",
+      "OP_CAT OP_SHA256",
+      "OP_CAT",
+      "OP_FROMALTSTACK OP_CAT",
+      "OP_FROMALTSTACK OP_CAT",
+      "OP_FROMALTSTACK OP_CAT",
+      "@tag OP_SWAP OP_CAT OP_SHA256",
+      "# One signature, checked twice:",
+      "# against what we built, and against",
+      "# the real one. Both pass only if",
+      "# they are the same bytes.",
+      "OP_2DUP @key OP_CSFS OP_VERIFY",
+      "OP_DROP",
+      "OP_1NEGATE OP_CAT      # 0x81",
+      "@key OP_CHECKSIG",
+    ].join("\n"),
+  });
   const vault = node("vault", "taproot", col(4), 0, { nLeaves: 1 });
-  const next = node("next", "template", col(5), 0, { version: 2, locktime: 0, nIn: 1, nOut: 1, in0_seq: 0xfffffffd, out0_value: 99_000 });
+  const next = node("next", "template", col(5), 0, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 1,
+    in0_seq: 0xfffffffd,
+    out0_value: 99_000,
+  });
   const funding = node("funding", "outpoint", col(6), 0, { txid: "f".repeat(64), vout: 0, value: 100_000 });
   nodes.push(tagText, key, tagHash, tagPrefix, covenant, vault, next, funding);
 
   const { lane, next: BOT } = band(nodes, 8);
 
   // --- the six pieces, in the order the script pops them -----------------
-  const PITCH = 291;                     // a slice plus a gap
+  const PITCH = 291; // a slice plus a gap
   const signature = node("signature", "sign", col(9), BOT + 0 * PITCH, { hash_type: 0 });
   const head = node("head", "slice", col(9), BOT + 1 * PITCH, { name: "version_locktime", offset: 0, length: 10 });
   const outValue = node("out_value", "le_bytes", col(9), BOT + 2 * PITCH, { value: 99_000, width: 8 });
@@ -914,7 +1148,11 @@ export function recursive(): Example {
   const TALL = 5 * PITCH + 235;
   const mid = (h: number) => BOT + Math.round((TALL - h) / 2);
   const unsigned = node("unsigned", "transaction", col(7), mid(320), { nIn: 1, nOut: 1 });
-  const message = node("message", "sighash", col(8), mid(377), { hash_type: "ALL|ANYONECANPAY", input_index: 0, prevout_value: 100_000 });
+  const message = node("message", "sighash", col(8), mid(377), {
+    hash_type: "ALL|ANYONECANPAY",
+    input_index: 0,
+    prevout_value: 100_000,
+  });
   const wit = node("witness", "witness", col(10), mid(360), { nItems: 6 });
   const spendTx = node("spend_tx", "transaction", col(11), mid(320), { nIn: 1, nOut: 1 });
   const run = node("check", "execute", col(12), mid(355), { input_index: 0, prevout_value: 100_000 });
@@ -949,7 +1187,9 @@ export function recursive(): Example {
     wire("covenant", "script", "vault", "leaf0"),
     // the output it pays to is the coin it is already sitting in
     wire("vault", "spk", "next", "out0_spk"),
-    ...scriptBus.edges, ...spkBus.edges, ...hops.flatMap((h) => h.edges),
+    ...scriptBus.edges,
+    ...spkBus.edges,
+    ...hops.flatMap((h) => h.edges),
     wire("funding", "outpoint", "unsigned", "prevout0"),
     wire("funding", "value", "unsigned", "value0"),
     wire("unsigned", "hex", "message", "tx"),
@@ -972,20 +1212,22 @@ export function recursive(): Example {
   ];
 
   nodes.unshift(
-    around("c_needs", "The tag and the key", "slate", nodes,
-      ["tag", "covenant_key", "tag_hash", "tag_prefix"]),
-    around("c_cov", "It pays only to itself", "rose", nodes,
-      ["covenant", "vault", "next"]),
+    around("c_needs", "The tag and the key", "slate", nodes, ["tag", "covenant_key", "tag_hash", "tag_prefix"]),
+    around("c_cov", "It pays only to itself", "rose", nodes, ["covenant", "vault", "next"]),
     around("c_funded", "Paid in", "slate", nodes, ["funding"]),
     around("c_msg", "The message it signs", "blue", nodes, ["unsigned", "message"]),
-    around("c_pieces", "Four slices, and the outputs it works out itself", "amber", nodes,
-      ["signature", "head", "out_value", "middle", "own_spk", "tail"]),
-    around("c_back", "Put back together", "green", nodes,
-      ["witness", "spend_tx", "check"]),
+    around("c_pieces", "Four slices, and the outputs it works out itself", "amber", nodes, [
+      "signature",
+      "head",
+      "out_value",
+      "middle",
+      "own_spk",
+      "tail",
+    ]),
+    around("c_back", "Put back together", "green", nodes, ["witness", "spend_tx", "check"]),
   );
   return { nodes, edges, network: "signet", ruleset: "catall", select: "covenant" };
 }
-
 
 // --- a covenant with CAT alone -----------------------------------------------
 
@@ -1026,29 +1268,54 @@ export function catonly(): Example {
   const chPrefix = node("challenge_prefix", "concat", col(2), 210, { nParts: 4 });
   const pinned = node("pinned_output", "sha256", col(2), 700, {});
 
-  const covenant = node("covenant", "tapscript", col(3), 0, { source: [
-    "# Rebuild the message this input signs.",
-    "@sigtag OP_SWAP OP_CAT",
-    "# Bytes 138 to 169 are the outputs",
-    "# hash. It comes from here, not from",
-    "# the spender. That is the covenant.",
-    "@pinned OP_CAT",
-    "OP_SWAP OP_CAT OP_SHA256",
-    "# The BIP-340 challenge over it, with",
-    "# R and P both set to the generator.",
-    "@challenge OP_SWAP OP_CAT OP_SHA256",
-    "# Ground to end in 01, so s = e + 1 is",
-    "# a byte swapped, not an addition.",
-    "OP_OVER OP_1 OP_CAT OP_EQUALVERIFY",
-    "OP_2 OP_CAT",
-    "# The signature is R || s, and R is G.",
-    "@G OP_SWAP OP_CAT",
-    "@G OP_CHECKSIG",
-  ].join("\n") });
+  const covenant = node("covenant", "tapscript", col(3), 0, {
+    source: [
+      "# Rebuild the message this input signs.",
+      "@sigtag OP_SWAP OP_CAT",
+      "# Bytes 138 to 169 are the outputs",
+      "# hash. It comes from here, not from",
+      "# the spender. That is the covenant.",
+      "@pinned OP_CAT",
+      "OP_SWAP OP_CAT OP_SHA256",
+      "# The BIP-340 challenge over it, with",
+      "# R and P both set to the generator.",
+      "@challenge OP_SWAP OP_CAT OP_SHA256",
+      "# Ground to end in 01, so s = e + 1 is",
+      "# a byte swapped, not an addition.",
+      "OP_OVER OP_1 OP_CAT OP_EQUALVERIFY",
+      "OP_2 OP_CAT",
+      "# The signature is R || s, and R is G.",
+      "@G OP_SWAP OP_CAT",
+      "@G OP_CHECKSIG",
+    ].join("\n"),
+  });
   const coin = node("coin", "taproot", col(4), 0, { nLeaves: 1 });
-  const spend = node("spend", "template", col(5), 0, { version: 2, locktime: 131, nIn: 1, nOut: 1, in0_seq: 0xfffffffd, out0_value: 99_000, out0_spk: DEST });
+  const spend = node("spend", "template", col(5), 0, {
+    version: 2,
+    locktime: 131,
+    nIn: 1,
+    nOut: 1,
+    in0_seq: 0xfffffffd,
+    out0_value: 99_000,
+    out0_spk: DEST,
+  });
   const funding = node("funding", "outpoint", col(6), 0, { txid: "ab".repeat(32), vout: 0, value: 100_000 });
-  nodes.push(sigTag, chTag, one, payValue, sigTagHash, chTagHash, oneOutput, sigPrefix, chPrefix, pinned, covenant, coin, spend, funding);
+  nodes.push(
+    sigTag,
+    chTag,
+    one,
+    payValue,
+    sigTagHash,
+    chTagHash,
+    oneOutput,
+    sigPrefix,
+    chPrefix,
+    pinned,
+    covenant,
+    coin,
+    spend,
+    funding,
+  );
 
   const { lane, next: BOT } = band(nodes, 6);
 
@@ -1062,7 +1329,11 @@ export function catonly(): Example {
   const TALL = 2 * PITCH + 235;
   const mid = (h: number) => BOT + Math.round((TALL - h) / 2);
   const unsigned = node("unsigned", "transaction", col(7), mid(320), { nIn: 1, nOut: 1 });
-  const message = node("message", "sighash", col(8), mid(377), { hash_type: "DEFAULT", input_index: 0, prevout_value: 100_000 });
+  const message = node("message", "sighash", col(8), mid(377), {
+    hash_type: "DEFAULT",
+    input_index: 0,
+    prevout_value: 100_000,
+  });
   const challenge = node("challenge", "concat", col(9), mid(200), { nParts: 2 });
   const e = node("e", "sha256", col(9), mid(200) + 260, {});
   const wit = node("witness", "witness", col(11), mid(300), { nItems: 3 });
@@ -1079,9 +1350,7 @@ export function catonly(): Example {
     { col: 8, to: ["message", "prevout_spk"] },
     { col: 13, to: ["check", "prevout_spk"] },
   ]);
-  const chBus = bus("bCh", ["challenge_prefix", "hex"], 2, lane(2), [
-    { col: 9, to: ["challenge", "part0"] },
-  ]);
+  const chBus = bus("bCh", ["challenge_prefix", "hex"], 2, lane(2), [{ col: 9, to: ["challenge", "part0"] }]);
   const hops = [
     via("hTpl", ["spend", "template"], 5, 7, lane(3), ["unsigned", "template"]),
     via("hCtrl", ["coin", "control0"], 4, 11, lane(4), ["witness", "control"]),
@@ -1106,7 +1375,10 @@ export function catonly(): Example {
     wire("challenge_prefix", "hex", "covenant", "ref_challenge"),
     wire("secret_one", "pubkey", "covenant", "ref_G"),
     wire("covenant", "script", "coin", "leaf0"),
-    ...scriptBus.edges, ...spkBus.edges, ...chBus.edges, ...hops.flatMap((h) => h.edges),
+    ...scriptBus.edges,
+    ...spkBus.edges,
+    ...chBus.edges,
+    ...hops.flatMap((h) => h.edges),
     wire("funding", "outpoint", "unsigned", "prevout0"),
     wire("funding", "value", "unsigned", "value0"),
     wire("unsigned", "hex", "message", "tx"),
@@ -1128,14 +1400,24 @@ export function catonly(): Example {
   ];
 
   nodes.unshift(
-    around("c_const", "Two tags and a key whose secret is 1", "slate", nodes,
-      ["sighash_tag", "challenge_tag", "secret_one", "sighash_tag_hash", "challenge_tag_hash", "sighash_prefix", "challenge_prefix"]),
-    around("c_pin", "The only output it will accept", "amber", nodes,
-      ["pay_value", "one_output", "pinned_output"]),
+    around("c_const", "Two tags and a key whose secret is 1", "slate", nodes, [
+      "sighash_tag",
+      "challenge_tag",
+      "secret_one",
+      "sighash_tag_hash",
+      "challenge_tag_hash",
+      "sighash_prefix",
+      "challenge_prefix",
+    ]),
+    around("c_pin", "The only output it will accept", "amber", nodes, ["pay_value", "one_output", "pinned_output"]),
     around("c_cov", "No CSFS anywhere", "rose", nodes, ["covenant", "coin", "spend"]),
     around("c_funded", "Paid in", "slate", nodes, ["funding"]),
     around("c_msg", "The message, and the challenge over it", "blue", nodes, ["unsigned", "message", "challenge", "e"]),
-    around("c_pieces", "Either side of the outputs hash, and the challenge", "amber", nodes, ["e_head", "head", "tail"]),
+    around("c_pieces", "Either side of the outputs hash, and the challenge", "amber", nodes, [
+      "e_head",
+      "head",
+      "tail",
+    ]),
     around("c_back", "Put back together", "green", nodes, ["witness", "spend_tx", "check"]),
   );
   return { nodes, edges, network: "signet", ruleset: "cat", select: "covenant" };
@@ -1165,13 +1447,67 @@ export const EXAMPLE_GROUPS: Array<{ title: string; keys: string[] }> = [
 ];
 
 export const EXAMPLES: Record<string, ExampleEntry> = {
-  vault: { label: "Vault", name: "vault", blurb: "A delay to notice a theft, and a cold path to stop it", needs: "BIP-119", build: vault },
-  pool: { label: "Congestion control", name: "congestion control", blurb: "One transaction commits to a tree of payouts", needs: "BIP-119", build: pool },
-  delegation: { label: "Delegation", name: "delegation", blurb: "Hand someone one spend without handing them your key", needs: "BIP-348", build: delegation },
-  oracle: { label: "Oracle payout", name: "oracle payout", blurb: "An attestation decides whether, never where", needs: "BIP-348 + BIP-119", build: oracle },
-  bip448: { label: "Rebindable state", name: "bip448", blurb: "Three opcodes, and the update leaf is three bytes", needs: "BIP-448", build: bip448 },
-  eltoo: { label: "Rebindable state, the older way", name: "eltoo", blurb: "The same channel, using an ANYPREVOUT key type", needs: "BIP-118", build: eltoo },
-  merkle: { label: "Merkle proof", name: "merkle proof", blurb: "A script folds a leaf back into a root it commits to", needs: "BIP-347", build: merkle },
-  catonly: { label: "CAT-only covenant", name: "cat-only covenant", blurb: "A covenant with no CSFS, using a signature the script builds itself", needs: "BIP-347", build: catonly },
-  recursive: { label: "Recursive covenant", name: "recursive covenant", blurb: "A coin that can only be spent back into itself", needs: "BIP-347 + BIP-348", build: recursive },
+  vault: {
+    label: "Vault",
+    name: "vault",
+    blurb: "A delay to notice a theft, and a cold path to stop it",
+    needs: "BIP-119",
+    build: vault,
+  },
+  pool: {
+    label: "Congestion control",
+    name: "congestion control",
+    blurb: "One transaction commits to a tree of payouts",
+    needs: "BIP-119",
+    build: pool,
+  },
+  delegation: {
+    label: "Delegation",
+    name: "delegation",
+    blurb: "Hand someone one spend without handing them your key",
+    needs: "BIP-348",
+    build: delegation,
+  },
+  oracle: {
+    label: "Oracle payout",
+    name: "oracle payout",
+    blurb: "An attestation decides whether, never where",
+    needs: "BIP-348 + BIP-119",
+    build: oracle,
+  },
+  bip448: {
+    label: "Rebindable state",
+    name: "bip448",
+    blurb: "Three opcodes, and the update leaf is three bytes",
+    needs: "BIP-448",
+    build: bip448,
+  },
+  eltoo: {
+    label: "Rebindable state, the older way",
+    name: "eltoo",
+    blurb: "The same channel, using an ANYPREVOUT key type",
+    needs: "BIP-118",
+    build: eltoo,
+  },
+  merkle: {
+    label: "Merkle proof",
+    name: "merkle proof",
+    blurb: "A script folds a leaf back into a root it commits to",
+    needs: "BIP-347",
+    build: merkle,
+  },
+  catonly: {
+    label: "CAT-only covenant",
+    name: "cat-only covenant",
+    blurb: "A covenant with no CSFS, using a signature the script builds itself",
+    needs: "BIP-347",
+    build: catonly,
+  },
+  recursive: {
+    label: "Recursive covenant",
+    name: "recursive covenant",
+    blurb: "A coin that can only be spent back into itself",
+    needs: "BIP-347 + BIP-348",
+    build: recursive,
+  },
 };

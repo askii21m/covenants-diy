@@ -9,7 +9,9 @@ export const onRequestGet: PagesFunction<Env, "id"> = async ({ params, env }) =>
 
   // Counted after the read, so a failure to count never costs a reader
   // their graph.
-  await env.GRAPHS.prepare("UPDATE graphs SET views = views + 1, last_view = ? WHERE id = ?").bind(Date.now(), id).run();
+  await env.GRAPHS.prepare("UPDATE graphs SET views = views + 1, last_view = ? WHERE id = ?")
+    .bind(Date.now(), id)
+    .run();
 
   return new Response(row.payload, {
     headers: {

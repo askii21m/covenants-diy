@@ -5,7 +5,18 @@
 
 import { useEffect, useRef } from "react";
 import { EditorState, Compartment } from "@codemirror/state";
-import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, rectangularSelection, crosshairCursor, placeholder as cmPlaceholder, tooltips } from "@codemirror/view";
+import {
+  EditorView,
+  keymap,
+  lineNumbers,
+  highlightActiveLine,
+  highlightActiveLineGutter,
+  drawSelection,
+  rectangularSelection,
+  crosshairCursor,
+  placeholder as cmPlaceholder,
+  tooltips,
+} from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab, toggleComment } from "@codemirror/commands";
 import { autocompletion, completionKeymap, closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import { linter, lintGutter, type Diagnostic } from "@codemirror/lint";
@@ -15,7 +26,11 @@ import { completions, type Refs } from "./complete";
 import { refsField, refMarks, hover, setRefs } from "./marks";
 import { useStore, registerPendingEdit } from "../store";
 
-export interface ScriptError { line: number; word: number; message: string }
+export interface ScriptError {
+  line: number;
+  word: number;
+  message: string;
+}
 
 /** The character range of the word the assembler pointed at, so the
  *  squiggle sits under the word rather than the whole line. */
@@ -27,7 +42,8 @@ function errorRange(doc: string, err: ScriptError): { from: number; to: number }
   // Words are whitespace-separated; comments do not count.
   const code = line.split("#")[0];
   const re = /\S+/g;
-  let m: RegExpExecArray | null, n = 0;
+  let m: RegExpExecArray | null,
+    n = 0;
   while ((m = re.exec(code))) {
     if (n === err.word) return { from: at + m.index, to: at + m.index + m[0].length };
     n++;
@@ -35,9 +51,7 @@ function errorRange(doc: string, err: ScriptError): { from: number; to: number }
   return { from: at, to: at + line.length };
 }
 
-export function Editor({ id, source, error, refs }: {
-  id: string; source: string; error?: ScriptError; refs: Refs[];
-}) {
+export function Editor({ id, source, error, refs }: { id: string; source: string; error?: ScriptError; refs: Refs[] }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const lintC = useRef(new Compartment());
@@ -56,7 +70,8 @@ export function Editor({ id, source, error, refs }: {
     };
     const schedule = (v: string, nodeId: string) => {
       clearTimeout(timer.current);
-      pendingText.current = v; pendingId.current = nodeId;
+      pendingText.current = v;
+      pendingId.current = nodeId;
       const doc = useStore.getState().active;
       timer.current = setTimeout(() => {
         pendingText.current = null;
@@ -66,7 +81,8 @@ export function Editor({ id, source, error, refs }: {
     const flush = () => {
       if (pendingText.current == null) return;
       clearTimeout(timer.current);
-      const v = pendingText.current; pendingText.current = null;
+      const v = pendingText.current;
+      pendingText.current = null;
       commit(v, pendingId.current);
     };
     const unregister = registerPendingEdit(flush);
@@ -78,24 +94,47 @@ export function Editor({ id, source, error, refs }: {
         // fixed: inside the editor they are clipped by the panel that
         // holds it, which cut the documentation in half.
         tooltips({ parent: document.body, position: "fixed" }),
-        lineNumbers(), highlightActiveLineGutter(), highlightActiveLine(),
-        history(), drawSelection(), rectangularSelection(), crosshairCursor(),
-        bracketMatching(), closeBrackets(),
-        tapscript, highlighting,
-        refsField, refMarks, hover,
-        autocompletion({ override: [completions(() => live.current.refs)], activateOnTyping: true, icons: false, maxRenderedOptions: 40 }),
+        lineNumbers(),
+        highlightActiveLineGutter(),
+        highlightActiveLine(),
+        history(),
+        drawSelection(),
+        rectangularSelection(),
+        crosshairCursor(),
+        bracketMatching(),
+        closeBrackets(),
+        tapscript,
+        highlighting,
+        refsField,
+        refMarks,
+        hover,
+        autocompletion({
+          override: [completions(() => live.current.refs)],
+          activateOnTyping: true,
+          icons: false,
+          maxRenderedOptions: 40,
+        }),
         lintGutter(),
         lintC.current.of(linter(() => [])),
         cmPlaceholder("A tapscript. Type OP_ for the opcodes, @ for a wired value."),
         keymap.of([
           { key: "Mod-/", run: toggleComment },
-          ...closeBracketsKeymap, ...completionKeymap, ...historyKeymap, indentWithTab, ...defaultKeymap,
+          ...closeBracketsKeymap,
+          ...completionKeymap,
+          ...historyKeymap,
+          indentWithTab,
+          ...defaultKeymap,
         ]),
         EditorView.lineWrapping,
         EditorView.updateListener.of((u) => {
           if (u.docChanged) schedule(u.state.doc.toString(), live.current.id);
         }),
-        EditorView.domEventHandlers({ blur: () => { flush(); return false; } }),
+        EditorView.domEventHandlers({
+          blur: () => {
+            flush();
+            return false;
+          },
+        }),
         EditorView.theme({
           "&": { height: "100%", fontSize: "13px" },
           ".cm-scroller": { fontFamily: "var(--mono)", lineHeight: "1.55" },
@@ -106,7 +145,12 @@ export function Editor({ id, source, error, refs }: {
     const v = new EditorView({ state, parent: host.current! });
     v.dispatch({ effects: setRefs.of(live.current.refs) });
     view.current = v;
-    return () => { unregister(); flush(); v.destroy(); view.current = null; };
+    return () => {
+      unregister();
+      flush();
+      v.destroy();
+      view.current = null;
+    };
     // Built once. Document swaps are handled below, so the editor keeps its
     // history and selection while a node is being edited.
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -118,7 +162,10 @@ export function Editor({ id, source, error, refs }: {
     const v = view.current;
     if (!v) return;
     if (v.state.doc.toString() === source) return;
-    v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: source }, selection: { anchor: Math.min(v.state.selection.main.anchor, source.length) } });
+    v.dispatch({
+      changes: { from: 0, to: v.state.doc.length, insert: source },
+      selection: { anchor: Math.min(v.state.selection.main.anchor, source.length) },
+    });
   }, [id, source]);
 
   // Which @names have a value wired into them, for the marks and the hover.

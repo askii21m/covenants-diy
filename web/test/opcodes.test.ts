@@ -16,14 +16,17 @@ describe("the opcode catalog", () => {
       for (const w of [o.name, o.alias].filter(Boolean) as string[]) {
         const r = assemble({ source: w });
         if (r.error) bad.push(`${w}: ${r.error.message}`);
-        else if (parseInt(r.script.slice(0, 2), 16) !== o.byte) bad.push(`${w}: assembles to ${r.script.slice(0, 2)}, catalog says ${o.byte.toString(16)}`);
+        else if (parseInt(r.script.slice(0, 2), 16) !== o.byte)
+          bad.push(`${w}: assembles to ${r.script.slice(0, 2)}, catalog says ${o.byte.toString(16)}`);
       }
     }
     expect(bad).toEqual([]);
   });
 
   it("describes every opcode it offers", () => {
-    const missing = opcodes().opcodes.filter((o) => !DESCRIPTIONS[o.name]).map((o) => o.name);
+    const missing = opcodes()
+      .opcodes.filter((o) => !DESCRIPTIONS[o.name])
+      .map((o) => o.name);
     expect(missing).toEqual([]);
   });
 

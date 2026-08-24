@@ -2,10 +2,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../src/engine", () => import("./engine.mock"));
 import { useStore, flushSession, serializeSession, registerPendingEdit } from "../src/store";
 
-const comment = (id: string) => ({ id, type: "comment", position: { x: 0, y: 0 }, data: { kind: "comment", name: id, width: 100, height: 80 } });
+const comment = (id: string) => ({
+  id,
+  type: "comment",
+  position: { x: 0, y: 0 },
+  data: { kind: "comment", name: id, width: 100, height: 80 },
+});
 
 describe("session autosave", () => {
-  beforeEach(() => { localStorage.clear(); useStore.setState({ docs: [], active: "", closed: [], nodes: [], edges: [] }); });
+  beforeEach(() => {
+    localStorage.clear();
+    useStore.setState({ docs: [], active: "", closed: [], nodes: [], edges: [] });
+  });
 
   it("flushes the live document immediately, before the debounce", () => {
     const s = useStore.getState();
@@ -26,7 +34,10 @@ describe("session autosave", () => {
 });
 
 describe("closed documents", () => {
-  beforeEach(() => { localStorage.clear(); useStore.setState({ docs: [], active: "", closed: [], nodes: [], edges: [] }); });
+  beforeEach(() => {
+    localStorage.clear();
+    useStore.setState({ docs: [], active: "", closed: [], nodes: [], edges: [] });
+  });
 
   it("survive a save and restore, so Reopen closed tab works after a reload", () => {
     const s = useStore.getState();
@@ -46,10 +57,13 @@ describe("closed documents", () => {
 
 describe("a refused write", () => {
   it("sets saveError, and the next success clears it", () => {
-    localStorage.clear(); useStore.setState({ docs: [], active: "", closed: [], nodes: [], edges: [], saveError: false });
+    localStorage.clear();
+    useStore.setState({ docs: [], active: "", closed: [], nodes: [], edges: [], saveError: false });
     useStore.getState().newDoc("a");
     const real = Storage.prototype.setItem;
-    Storage.prototype.setItem = () => { throw new DOMException("full", "QuotaExceededError"); };
+    Storage.prototype.setItem = () => {
+      throw new DOMException("full", "QuotaExceededError");
+    };
     expect(flushSession()).toBe(false);
     expect(useStore.getState().saveError).toBe(true);
     Storage.prototype.setItem = real;
@@ -59,13 +73,21 @@ describe("a refused write", () => {
 });
 
 describe("pending editor edits", () => {
-  beforeEach(() => { localStorage.clear(); useStore.setState({ docs: [], active: "", closed: [], nodes: [], edges: [], saveError: false }); });
+  beforeEach(() => {
+    localStorage.clear();
+    useStore.setState({ docs: [], active: "", closed: [], nodes: [], edges: [], saveError: false });
+  });
 
   it("are landed before a document switch, not dropped", () => {
     const a = useStore.getState().newDoc("a", { nodes: [comment("c1")], edges: [] });
     const id = useStore.getState().nodes[0].id;
     let held: string | null = "typed";
-    const off = registerPendingEdit(() => { if (held != null) { useStore.getState().setField(id, "name", held); held = null; } });
+    const off = registerPendingEdit(() => {
+      if (held != null) {
+        useStore.getState().setField(id, "name", held);
+        held = null;
+      }
+    });
     useStore.getState().newDoc("b");
     expect(held).toBeNull();
     useStore.getState().switchDoc(a);

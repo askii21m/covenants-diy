@@ -10,7 +10,14 @@ import { useStore, type FlowNode } from "../store";
 import { InlineName } from "./InlineName";
 
 export const COMMENT_COLORS: Record<string, string> = {
-  teal: "#0F766E", blue: "#2E5FA8", violet: "#7C6BAE", amber: "#B54708", rose: "#B42318", slate: "#5A6472", green: "#3F7D3A", ink: "#0E1116",
+  teal: "#0F766E",
+  blue: "#2E5FA8",
+  violet: "#7C6BAE",
+  amber: "#B54708",
+  rose: "#B42318",
+  slate: "#5A6472",
+  green: "#3F7D3A",
+  ink: "#0E1116",
 };
 
 function CommentImpl({ id, data, selected, positionAbsoluteX, positionAbsoluteY }: NodeProps<FlowNode>) {
@@ -25,7 +32,9 @@ function CommentImpl({ id, data, selected, positionAbsoluteX, positionAbsoluteY 
   // inside it can rise above them. The bubble is a landmark and has to, so
   // it is rendered into the viewport instead, as a sibling of the nodes.
   const [layer, setLayer] = useState<HTMLElement | null>(null);
-  useEffect(() => { setLayer(document.querySelector<HTMLElement>(".react-flow__viewport")); }, []);
+  useEffect(() => {
+    setLayer(document.querySelector<HTMLElement>(".react-flow__viewport"));
+  }, []);
   const color = COMMENT_COLORS[String(data.color ?? "teal")] ?? COMMENT_COLORS.teal;
   const title = String(data.name ?? "");
   // Unreal's "Show Bubble When Zoomed": below 60% a bubble floats above
@@ -35,20 +44,49 @@ function CommentImpl({ id, data, selected, positionAbsoluteX, positionAbsoluteY 
   return (
     // React Flow does not select this node (it is marquee-proof), so a press
     // on it selects it here, in the capture phase, before the drag starts.
-    <div className={`comment ${selected ? "on" : ""}`} style={{ width: Number(data.width), height: Number(data.height), ["--cm" as string]: color }}
-      onMouseDownCapture={(e) => { if (e.button === 0 && !selected) select(id); }}>
-      <NodeResizer isVisible={selected} minWidth={160} minHeight={80} lineClassName="cm-line" handleClassName="cm-handle"
-        onResize={(_, p) => setSize(id, p.width, p.height)} />
+    <div
+      className={`comment ${selected ? "on" : ""}`}
+      style={{ width: Number(data.width), height: Number(data.height), ["--cm" as string]: color }}
+      onMouseDownCapture={(e) => {
+        if (e.button === 0 && !selected) select(id);
+      }}
+    >
+      <NodeResizer
+        isVisible={selected}
+        minWidth={160}
+        minHeight={80}
+        lineClassName="cm-line"
+        handleClassName="cm-handle"
+        onResize={(_, p) => setSize(id, p.width, p.height)}
+      />
       {/* Counter-scaled so it reads at any distance, but never wider on
           screen than the box it names: two boxes side by side would
           otherwise have their labels overlap. */}
-      {bubble > 0 && layer && createPortal(
-        <div className="cm-anchor" style={{ left: positionAbsoluteX, top: positionAbsoluteY, ["--cm" as string]: color }}>
-          <div className="cm-bubble" style={{ transform: `scale(${bubble})`, maxWidth: Number(data.width) / bubble }}>{title}</div>
-        </div>, layer)}
+      {bubble > 0 &&
+        layer &&
+        createPortal(
+          <div
+            className="cm-anchor"
+            style={{ left: positionAbsoluteX, top: positionAbsoluteY, ["--cm" as string]: color }}
+          >
+            <div className="cm-bubble" style={{ transform: `scale(${bubble})`, maxWidth: Number(data.width) / bubble }}>
+              {title}
+            </div>
+          </div>,
+          layer,
+        )}
       <div className="cm-head">
-        <InlineName className="cm-title" value={title} placeholder="Comment" editing={editing}
-          onStart={() => setRenaming(id)} onCommit={(v) => { if (v != null) setField(id, "name", v); setRenaming(null); }} />
+        <InlineName
+          className="cm-title"
+          value={title}
+          placeholder="Comment"
+          editing={editing}
+          onStart={() => setRenaming(id)}
+          onCommit={(v) => {
+            if (v != null) setField(id, "name", v);
+            setRenaming(null);
+          }}
+        />
       </div>
     </div>
   );

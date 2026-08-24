@@ -48,7 +48,10 @@ describe("summarise", () => {
     ["nodes that are not arrays", packed({ v: 1, N: [{ kind: "key" }], E: [] })],
     ["a node with no kind", packed({ v: 1, N: [[]], E: [] })],
     ["more nodes than the editor can hold", packed({ v: 1, N: Array.from({ length: 2001 }, () => ["key"]), E: [] })],
-    ["more edges than the editor can hold", packed({ v: 1, N: [["key"]], E: Array.from({ length: 4001 }, () => [0, "a", 0, "b"]) })],
+    [
+      "more edges than the editor can hold",
+      packed({ v: 1, N: [["key"]], E: Array.from({ length: 4001 }, () => [0, "a", 0, "b"]) }),
+    ],
   ])("refuses %s", async (_label, payload) => {
     expect(await summarise(payload)).toBeNull();
   });

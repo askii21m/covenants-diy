@@ -14,7 +14,9 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   let id = "";
   for (let len = 10; len <= 20; len += 2) {
     id = full.slice(0, len);
-    const row = await env.GRAPHS.prepare("SELECT payload FROM graphs WHERE id = ?").bind(id).first<{ payload: string }>();
+    const row = await env.GRAPHS.prepare("SELECT payload FROM graphs WHERE id = ?")
+      .bind(id)
+      .first<{ payload: string }>();
     if (!row) break;
     if (row.payload === payload) return json({ id });
     id = "";
@@ -25,7 +27,19 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     `INSERT INTO graphs (id, payload, bytes, nodes, edges, network, ruleset, kinds, created, views)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
      ON CONFLICT(id) DO NOTHING`,
-  ).bind(id, payload, payload.length, summary.nodes, summary.edges, summary.network, summary.ruleset, summary.kinds, Date.now()).run();
+  )
+    .bind(
+      id,
+      payload,
+      payload.length,
+      summary.nodes,
+      summary.edges,
+      summary.network,
+      summary.ruleset,
+      summary.kinds,
+      Date.now(),
+    )
+    .run();
 
   return json({ id });
 };

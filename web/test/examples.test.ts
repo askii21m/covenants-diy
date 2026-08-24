@@ -38,7 +38,10 @@ describe.each(Object.entries(EXAMPLES))("%s", (key, ex) => {
     for (const n of f.nodes.filter((n) => n.data.kind === "tapscript")) {
       const view = computed[n.id]?.extra as { enforcement?: { status: string; inactive: string[] } } | undefined;
       const e = view?.enforcement;
-      if (!e) { bad.push(`${n.data.name}: no enforcement report`); continue; }
+      if (!e) {
+        bad.push(`${n.data.name}: no enforcement report`);
+        continue;
+      }
       if (e.status !== "enforced") bad.push(`${n.data.name}: ${e.status} (${e.inactive.join(", ")})`);
     }
     expect(bad, `${key} declares ruleset "${ex.build().ruleset}"`).toEqual([]);
@@ -48,12 +51,22 @@ describe.each(Object.entries(EXAMPLES))("%s", (key, ex) => {
     const f = ex.build();
     const byId = new Map(f.nodes.map((n) => [n.id, n]));
     for (const e of f.edges) {
-      const s = byId.get(e.source), t = byId.get(e.target);
+      const s = byId.get(e.source),
+        t = byId.get(e.target);
       expect(s, `${key}: edge from missing node ${e.source}`).toBeDefined();
       expect(t, `${key}: edge to missing node ${e.target}`).toBeDefined();
-      const sk = String(s!.data.kind), tk = String(t!.data.kind);
-      if (sk !== "reroute") expect(KINDS[sk].outputs(s!.data).map((p) => p.id), `${key}: ${s!.data.name}.${e.sourceHandle}`).toContain(e.sourceHandle);
-      if (tk !== "reroute") expect(KINDS[tk].inputs(t!.data).map((p) => p.id), `${key}: ${t!.data.name}.${e.targetHandle}`).toContain(e.targetHandle);
+      const sk = String(s!.data.kind),
+        tk = String(t!.data.kind);
+      if (sk !== "reroute")
+        expect(
+          KINDS[sk].outputs(s!.data).map((p) => p.id),
+          `${key}: ${s!.data.name}.${e.sourceHandle}`,
+        ).toContain(e.sourceHandle);
+      if (tk !== "reroute")
+        expect(
+          KINDS[tk].inputs(t!.data).map((p) => p.id),
+          `${key}: ${t!.data.name}.${e.targetHandle}`,
+        ).toContain(e.targetHandle);
     }
   });
 });
@@ -72,9 +85,10 @@ describe.each(Object.entries(EXAMPLES))("%s layout", (key, ex) => {
     const f = ex.build();
     const real = f.nodes.filter((n) => n.data.kind !== "comment");
     const bad: string[] = [];
-    for (let i = 0; i < real.length; i++) for (let j = i + 1; j < real.length; j++) {
-      if (hits(box(real[i]), box(real[j]))) bad.push(`${real[i].id} / ${real[j].id}`);
-    }
+    for (let i = 0; i < real.length; i++)
+      for (let j = i + 1; j < real.length; j++) {
+        if (hits(box(real[i]), box(real[j]))) bad.push(`${real[i].id} / ${real[j].id}`);
+      }
     expect(bad, `${key} has overlapping nodes`).toEqual([]);
   });
 

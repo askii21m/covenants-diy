@@ -8,9 +8,17 @@ describe("ids", () => {
     expect(ids.size).toBe(10000);
   });
   it("are remapped consistently for nodes and edges", () => {
-    const flow = remapIds({ nodes: [{ id: "a", position: { x: 0, y: 0 }, data: { kind: "comment" } }, { id: "b", position: { x: 0, y: 0 }, data: { kind: "reroute" } }], edges: [{ id: "e", source: "a", sourceHandle: "out", target: "b", targetHandle: "in" }] });
+    const flow = remapIds({
+      nodes: [
+        { id: "a", position: { x: 0, y: 0 }, data: { kind: "comment" } },
+        { id: "b", position: { x: 0, y: 0 }, data: { kind: "reroute" } },
+      ],
+      edges: [{ id: "e", source: "a", sourceHandle: "out", target: "b", targetHandle: "in" }],
+    });
     const [a, b] = flow.nodes!.map((n) => n.id);
-    expect(a).not.toBe("a"); expect(b).not.toBe("b"); expect(a.startsWith("comment_")).toBe(true);
+    expect(a).not.toBe("a");
+    expect(b).not.toBe("b");
+    expect(a.startsWith("comment_")).toBe(true);
     expect(flow.edges![0]).toMatchObject({ source: a, target: b, id: `e_${a}.out->${b}.in` });
   });
   it("two documents from one flow share no node ids", () => {

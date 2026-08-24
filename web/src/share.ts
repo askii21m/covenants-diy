@@ -35,7 +35,10 @@ interface Wire {
   E: Array<[number, string | null, number, string | null]>;
 }
 
-export interface SharedDoc { name?: string; flow: Partial<Flow> }
+export interface SharedDoc {
+  name?: string;
+  flow: Partial<Flow>;
+}
 
 function toBase64Url(bytes: Uint8Array): string {
   let s = "";
@@ -50,7 +53,9 @@ function fromBase64Url(s: string): Uint8Array | null {
     const out = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
     return out;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function blobOf(bytes: Uint8Array): Blob {
@@ -73,13 +78,21 @@ async function inflate(bytes: Uint8Array, cap: number): Promise<Uint8Array | nul
       const { done, value } = await reader.read();
       if (done) break;
       total += value.length;
-      if (total > cap) { await reader.cancel(); return null; }
+      if (total > cap) {
+        await reader.cancel();
+        return null;
+      }
       chunks.push(value);
     }
-  } catch { return null; }
+  } catch {
+    return null;
+  }
   const out = new Uint8Array(total);
   let at = 0;
-  for (const c of chunks) { out.set(c, at); at += c.length; }
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
   return out;
 }
 
@@ -98,8 +111,18 @@ export async function encodeFlow(doc: SharedDoc): Promise<string> {
       return [String(kind), Math.round(n.position.x), Math.round(n.position.y), rest];
     }),
     E: (doc.flow.edges ?? []).flatMap((e) => {
-      const from = order.get(e.source), to = order.get(e.target);
-      return from == null || to == null ? [] : [[from, e.sourceHandle ?? null, to, e.targetHandle ?? null] as [number, string | null, number, string | null]];
+      const from = order.get(e.source),
+        to = order.get(e.target);
+      return from == null || to == null
+        ? []
+        : [
+            [from, e.sourceHandle ?? null, to, e.targetHandle ?? null] as [
+              number,
+              string | null,
+              number,
+              string | null,
+            ],
+          ];
     }),
   };
   return toBase64Url(await deflate(new TextEncoder().encode(JSON.stringify(wire))));
@@ -114,7 +137,11 @@ export async function decodeFlow(fragment: string): Promise<SharedDoc | null> {
   if (!bytes) return null;
 
   let wire: Wire;
-  try { wire = JSON.parse(new TextDecoder().decode(bytes)) as Wire; } catch { return null; }
+  try {
+    wire = JSON.parse(new TextDecoder().decode(bytes)) as Wire;
+  } catch {
+    return null;
+  }
   if (!wire || wire.v !== 1 || !Array.isArray(wire.N) || !Array.isArray(wire.E)) return null;
   if (wire.N.length > MAX_NODES || wire.E.length > MAX_EDGES) return null;
 
@@ -137,8 +164,10 @@ export async function decodeFlow(fragment: string): Promise<SharedDoc | null> {
     if (!ids[from as number] || !ids[to as number]) continue;
     edges.push({
       id: `e_${ids[from as number]}.${sh}->${ids[to as number]}.${th}`,
-      source: ids[from as number], sourceHandle: typeof sh === "string" ? sh : null,
-      target: ids[to as number], targetHandle: typeof th === "string" ? th : null,
+      source: ids[from as number],
+      sourceHandle: typeof sh === "string" ? sh : null,
+      target: ids[to as number],
+      targetHandle: typeof th === "string" ? th : null,
     });
   }
 
@@ -191,5 +220,7 @@ export async function fetchShared(id: string): Promise<SharedDoc | null> {
     if (!res.ok) return null;
     const payload = await res.text();
     return await decodeFlow(payload);
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }

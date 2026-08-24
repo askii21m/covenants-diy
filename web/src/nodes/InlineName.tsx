@@ -4,8 +4,20 @@
 import { useEffect, useRef, useState } from "react";
 import { registerPendingEdit } from "../store";
 
-export function InlineName({ value, editing, onStart, onCommit, className, placeholder }: {
-  value: string; editing: boolean; onStart: () => void; onCommit: (v: string | null) => void; className?: string; placeholder?: string;
+export function InlineName({
+  value,
+  editing,
+  onStart,
+  onCommit,
+  className,
+  placeholder,
+}: {
+  value: string;
+  editing: boolean;
+  onStart: () => void;
+  onCommit: (v: string | null) => void;
+  className?: string;
+  placeholder?: string;
 }) {
   const [draft, setDraft] = useState(value);
   const ref = useRef<HTMLInputElement>(null);
@@ -13,7 +25,15 @@ export function InlineName({ value, editing, onStart, onCommit, className, place
   // commits it rather than dropping it, the same as a field or a script.
   const live = useRef({ draft, value, onCommit });
   live.current = { draft, value, onCommit };
-  useEffect(() => { if (editing) { setDraft(value); requestAnimationFrame(() => { ref.current?.focus(); ref.current?.select(); }); } }, [editing, value]);
+  useEffect(() => {
+    if (editing) {
+      setDraft(value);
+      requestAnimationFrame(() => {
+        ref.current?.focus();
+        ref.current?.select();
+      });
+    }
+  }, [editing, value]);
   useEffect(() => {
     if (!editing) return;
     return registerPendingEdit(() => {
@@ -23,13 +43,34 @@ export function InlineName({ value, editing, onStart, onCommit, className, place
     });
   }, [editing]);
   if (!editing) {
-    return <span className={className} title="double-click to rename" onDoubleClick={(e) => { e.stopPropagation(); onStart(); }}>{value || <span className="ph">{placeholder}</span>}</span>;
+    return (
+      <span
+        className={className}
+        title="double-click to rename"
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onStart();
+        }}
+      >
+        {value || <span className="ph">{placeholder}</span>}
+      </span>
+    );
   }
   return (
-    <input ref={ref} className={`${className ?? ""} inline-edit nodrag nopan`} value={draft} size={Math.min(20, Math.max(4, draft.length + 1))}
+    <input
+      ref={ref}
+      className={`${className ?? ""} inline-edit nodrag nopan`}
+      value={draft}
+      size={Math.min(20, Math.max(4, draft.length + 1))}
       onChange={(e) => setDraft(e.target.value)}
-      onKeyDown={(e) => { e.stopPropagation(); if (e.key === "Enter") onCommit(draft.trim()); if (e.key === "Escape") onCommit(null); }}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter") onCommit(draft.trim());
+        if (e.key === "Escape") onCommit(null);
+      }}
       onBlur={() => onCommit(draft.trim())}
-      onMouseDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()} />
+      onMouseDown={(e) => e.stopPropagation()}
+      onDoubleClick={(e) => e.stopPropagation()}
+    />
   );
 }

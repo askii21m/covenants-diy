@@ -31,7 +31,8 @@ describe.each(Object.entries(EXAMPLES))("%s", (key, ex) => {
     // compute the same things on the other side.
     const before = evaluate(f.nodes, f.edges, f.network, f.ruleset);
     const after = evaluate(back!.flow.nodes!, back!.flow.edges!, back!.flow.network!, back!.flow.ruleset!);
-    const runs = (ns: typeof f.nodes, c: typeof before) => ns.filter((n) => n.data.kind === "execute").map((n) => c[n.id]?.outputs.ok);
+    const runs = (ns: typeof f.nodes, c: typeof before) =>
+      ns.filter((n) => n.data.kind === "execute").map((n) => c[n.id]?.outputs.ok);
     expect(runs(back!.flow.nodes!, after)).toEqual(runs(f.nodes, before));
     expect(runs(f.nodes, before).every((r) => r === "1")).toBe(true);
   });
@@ -69,15 +70,23 @@ describe("a hostile link", () => {
 
   it("drops nodes and edges it cannot make sense of, rather than failing", async () => {
     const messy = {
-      v: 1, w: "bitcoin", r: "nonsense",
-      N: [["comment", 0, 0, { name: "ok", width: 200, height: 100 }], ["not-a-kind", 0, 0, {}]],
-      E: [[0, "a", 99, "b"], [0, "a", 1, "b"]],
+      v: 1,
+      w: "bitcoin",
+      r: "nonsense",
+      N: [
+        ["comment", 0, 0, { name: "ok", width: 200, height: 100 }],
+        ["not-a-kind", 0, 0, {}],
+      ],
+      E: [
+        [0, "a", 99, "b"],
+        [0, "a", 1, "b"],
+      ],
     };
     const back = await decodeFlow(b64url(deflateRawSync(Buffer.from(JSON.stringify(messy)))));
     expect(back).not.toBeNull();
-    expect(back!.flow.nodes).toHaveLength(1);          // the unknown kind is gone
-    expect(back!.flow.edges).toHaveLength(0);          // both edges pointed at it
-    expect(back!.flow.network).toBeUndefined();        // mainnet is not offered
+    expect(back!.flow.nodes).toHaveLength(1); // the unknown kind is gone
+    expect(back!.flow.edges).toHaveLength(0); // both edges pointed at it
+    expect(back!.flow.network).toBeUndefined(); // mainnet is not offered
     expect(back!.flow.ruleset).toBeUndefined();
   });
 });

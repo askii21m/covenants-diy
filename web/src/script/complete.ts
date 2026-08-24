@@ -6,9 +6,12 @@ import type { CompletionContext, CompletionResult, Completion } from "@codemirro
 import { catalog, statusNote, type Opcode } from "./language";
 
 /** The values wired into this node, by reference name. */
-export interface Refs { name: string; value?: string }
+export interface Refs {
+  name: string;
+  value?: string;
+}
 
-function info(o: Opcode): (() => Node) {
+function info(o: Opcode): () => Node {
   return () => {
     const wrap = document.createElement("div");
     wrap.className = "cm-doc";
@@ -52,10 +55,14 @@ function opcodeOptions(): Completion[] {
   if (options) return options;
   options = catalog().map((o) => ({
     label: o.name,
-    detail: o.status === "covenant" ? String(o.deployment).toUpperCase()
-      : o.status === "success" ? "OP_SUCCESS"
-      : o.status === "disallowed" ? "not in tapscript"
-      : o.category,
+    detail:
+      o.status === "covenant"
+        ? String(o.deployment).toUpperCase()
+        : o.status === "success"
+          ? "OP_SUCCESS"
+          : o.status === "disallowed"
+            ? "not in tapscript"
+            : o.category,
     type: o.status === "covenant" ? "keyword" : o.status === "ok" ? "function" : "constant",
     info: info(o),
     boost: boost(o),

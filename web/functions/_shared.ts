@@ -34,7 +34,9 @@ function fromBase64Url(s: string): Uint8Array | null {
     const out = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
     return out;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 /** Inflate, abandoning the stream the moment it passes the cap. A few
@@ -49,13 +51,21 @@ async function inflate(bytes: Uint8Array, cap: number): Promise<Uint8Array | nul
       const { done, value } = await reader.read();
       if (done) break;
       total += value.length;
-      if (total > cap) { await reader.cancel(); return null; }
+      if (total > cap) {
+        await reader.cancel();
+        return null;
+      }
       chunks.push(value);
     }
-  } catch { return null; }
+  } catch {
+    return null;
+  }
   const out = new Uint8Array(total);
   let at = 0;
-  for (const c of chunks) { out.set(c, at); at += c.length; }
+  for (const c of chunks) {
+    out.set(c, at);
+    at += c.length;
+  }
   return out;
 }
 
@@ -75,7 +85,11 @@ export async function summarise(payload: string): Promise<Summary | null> {
   const bytes = await inflate(raw, MAX_DECODED);
   if (!bytes) return null;
   let doc: { v?: unknown; N?: unknown; E?: unknown; w?: unknown; r?: unknown };
-  try { doc = JSON.parse(new TextDecoder().decode(bytes)); } catch { return null; }
+  try {
+    doc = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
   if (!doc || doc.v !== 1 || !Array.isArray(doc.N) || !Array.isArray(doc.E)) return null;
   if (doc.N.length > MAX_NODES || doc.E.length > MAX_EDGES) return null;
 
