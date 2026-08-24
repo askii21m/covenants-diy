@@ -35,7 +35,10 @@ pub fn instructions(script: &Script) -> Vec<(usize, String)> {
             }
             Ok((pos, Instruction::Op(op))) => out.push((pos, op_name(op))),
             Err(_) => {
-                let pos = out.last().map(|(p, _): &(usize, String)| *p + 1).unwrap_or(0);
+                let pos = out
+                    .last()
+                    .map(|(p, _): &(usize, String)| *p + 1)
+                    .unwrap_or(0);
                 out.push((pos, "<invalid>".to_string()));
                 break;
             }

@@ -178,8 +178,7 @@ impl ExecutionResult {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub struct ExecStats {
     /// The highest number of stack items occurred during execution.
     /// This counts both the stack and the altstack.
@@ -260,8 +259,7 @@ impl Exec {
         // decode and even if the initial stack breaks resource limits.
         let mut pre_success: Option<Opcode> = None;
         if ctx == ExecCtx::Tapscript {
-            if let TapscriptScan::Success(op) =
-                scan_tapscript_op_success(&script, &opt.deployments)
+            if let TapscriptScan::Success(op) = scan_tapscript_op_success(&script, &opt.deployments)
             {
                 pre_success = Some(Opcode::from(op));
             }
@@ -283,7 +281,10 @@ impl Exec {
                 if opt.enforce_stack_limit && script_witness.len() > MAX_STACK_SIZE {
                     return Err(Error::Exec(ExecError::StackSize));
                 }
-                if script_witness.iter().any(|e| e.len() > MAX_SCRIPT_ELEMENT_SIZE) {
+                if script_witness
+                    .iter()
+                    .any(|e| e.len() > MAX_SCRIPT_ELEMENT_SIZE)
+                {
                     return Err(Error::Exec(ExecError::PushSize));
                 }
             }
@@ -1115,13 +1116,19 @@ impl Exec {
             // spends. Pushing rather than verifying is what lets a
             // signature be checked against it, which is BIP-448's
             // rebindable signature.
-            OP_RETURN_206 if self.ctx == ExecCtx::Tapscript && self.opt.deployments.templatehash => {
+            OP_RETURN_206
+                if self.ctx == ExecCtx::Tapscript && self.opt.deployments.templatehash =>
+            {
                 let annex = match &self.tx.taproot_annex_scriptleaf {
                     Some((_, annex)) => annex.as_deref(),
                     None => None,
                 };
-                let hash = covenants_core::templatehash::template_hash(&self.tx.tx, self.tx.input_idx, annex)
-                    .map_err(|_| ExecError::TemplateHashInputIndex)?;
+                let hash = covenants_core::templatehash::template_hash(
+                    &self.tx.tx,
+                    self.tx.input_idx,
+                    annex,
+                )
+                .map_err(|_| ExecError::TemplateHashInputIndex)?;
                 self.stack.pushstr(&hash);
             }
 
@@ -1279,13 +1286,12 @@ fn is_op_success(op: u8) -> bool {
 /// does not require minimal pushes, so this must not use the minimal
 /// instruction iterator.
 fn scan_tapscript_op_success(script: &Script, deployments: &Deployments) -> TapscriptScan {
-    let carved_out =
-        |op: u8| {
-            (deployments.cat && op == 0x7e)
-                || (deployments.csfs && op == 0xcc)
-                || (deployments.internalkey && op == 0xcb)
-                || (deployments.templatehash && op == 0xce)
-        };
+    let carved_out = |op: u8| {
+        (deployments.cat && op == 0x7e)
+            || (deployments.csfs && op == 0xcc)
+            || (deployments.internalkey && op == 0xcb)
+            || (deployments.templatehash && op == 0xce)
+    };
     for instruction in script.instructions() {
         match instruction {
             Ok(Instruction::Op(op)) => {

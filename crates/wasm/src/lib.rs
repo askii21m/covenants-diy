@@ -96,7 +96,10 @@ fn build_template(req: &TemplateRequest) -> Result<Transaction, JsError> {
     for (i, o) in req.outputs.iter().enumerate() {
         output.push(TxOut {
             value: Amount::from_sat(o.value),
-            script_pubkey: ScriptBuf::from(hex(&o.script_pubkey, &format!("output {i} scriptPubKey"))?),
+            script_pubkey: ScriptBuf::from(hex(
+                &o.script_pubkey,
+                &format!("output {i} scriptPubKey"),
+            )?),
         });
     }
     Ok(Transaction {
@@ -188,13 +191,19 @@ pub struct TransactionView {
 #[wasm_bindgen]
 pub fn realize(req: Ts<RealizeRequest>) -> Result<Ts<TransactionView>, JsError> {
     let req = req.to_rust().map_err(err("request"))?;
-    let mut tx: Transaction = deserialize(&hex(&req.template, "template")?).map_err(err("template"))?;
+    let mut tx: Transaction =
+        deserialize(&hex(&req.template, "template")?).map_err(err("template"))?;
     let mut complete = true;
     for (i, input) in tx.input.iter_mut().enumerate() {
-        match req.prevouts.get(i).map(|s| s.trim()).filter(|s| !s.is_empty()) {
+        match req
+            .prevouts
+            .get(i)
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+        {
             Some(s) => {
-                input.previous_output =
-                    OutPoint::from_str(s).map_err(|e| JsError::new(&format!("prevout {i}: {e}")))?;
+                input.previous_output = OutPoint::from_str(s)
+                    .map_err(|e| JsError::new(&format!("prevout {i}: {e}")))?;
             }
             None => complete = false,
         }
@@ -209,7 +218,9 @@ pub fn realize(req: Ts<RealizeRequest>) -> Result<Ts<TransactionView>, JsError> 
             _ => complete = false,
         }
     }
-    let fee = if req.prevout_values.len() == tx.input.len() && req.prevout_values.iter().all(|v| v.is_some()) {
+    let fee = if req.prevout_values.len() == tx.input.len()
+        && req.prevout_values.iter().all(|v| v.is_some())
+    {
         let in_sum: i64 = req.prevout_values.iter().map(|v| v.unwrap() as i64).sum();
         let out_sum: i64 = tx.output.iter().map(|o| o.value.to_sat() as i64).sum();
         Some(in_sum - out_sum)
@@ -221,7 +232,9 @@ pub fn realize(req: Ts<RealizeRequest>) -> Result<Ts<TransactionView>, JsError> 
         hex: serialize_hex(&tx),
         txid: txid.to_string(),
         wtxid: tx.compute_wtxid().to_string(),
-        outpoints: (0..tx.output.len()).map(|v| format!("{txid}:{v}")).collect(),
+        outpoints: (0..tx.output.len())
+            .map(|v| format!("{txid}:{v}"))
+            .collect(),
         weight: tx.weight().to_wu() as usize,
         vsize: tx.vsize(),
         fee,
@@ -330,7 +343,11 @@ pub fn assemble(req: Ts<AssembleRequest>) -> Result<Ts<AssembleView>, JsError> {
                 asm: None,
                 leaf_hash: None,
                 enforcement: None,
-                error: Some(SourcePosition { line: e.line, word: e.word, message: e.message }),
+                error: Some(SourcePosition {
+                    line: e.line,
+                    word: e.word,
+                    message: e.message,
+                }),
             }
             .into_ts()
             .map_err(err("response"));
@@ -344,7 +361,9 @@ pub fn assemble(req: Ts<AssembleRequest>) -> Result<Ts<AssembleView>, JsError> {
         Ok(a) => AssembleView {
             refs,
             asm: Some(asm::render(&a.script)),
-            leaf_hash: Some(TapLeafHash::from_script(&a.script, LeafVersion::TapScript).to_string()),
+            leaf_hash: Some(
+                TapLeafHash::from_script(&a.script, LeafVersion::TapScript).to_string(),
+            ),
             enforcement: Some(enforce::classify(&a.script, &req.ruleset)),
             script: Some(a.script.to_hex_string()),
             error: None,
@@ -355,7 +374,11 @@ pub fn assemble(req: Ts<AssembleRequest>) -> Result<Ts<AssembleView>, JsError> {
             asm: None,
             leaf_hash: None,
             enforcement: None,
-            error: Some(SourcePosition { line: e.line, word: e.word, message: e.message }),
+            error: Some(SourcePosition {
+                line: e.line,
+                word: e.word,
+                message: e.message,
+            }),
         },
     };
     view.into_ts().map_err(err("response"))
@@ -364,15 +387,20 @@ pub fn assemble(req: Ts<AssembleRequest>) -> Result<Ts<AssembleView>, JsError> {
 /// Script hex to covenant-aware assembly.
 #[wasm_bindgen]
 pub fn disassemble(script_hex: &str) -> Result<String, JsError> {
-    Ok(asm::render(ScriptBuf::from(hex(script_hex, "script")?).as_script()))
+    Ok(asm::render(
+        ScriptBuf::from(hex(script_hex, "script")?).as_script(),
+    ))
 }
 
 #[wasm_bindgen]
 pub fn classify(script_hex: &str, ruleset: Ts<Ruleset>) -> Result<Ts<EnforcementReport>, JsError> {
     let ruleset = ruleset.to_rust().map_err(err("ruleset"))?;
-    enforce::classify(ScriptBuf::from(hex(script_hex, "script")?).as_script(), &ruleset)
-        .into_ts()
-        .map_err(err("response"))
+    enforce::classify(
+        ScriptBuf::from(hex(script_hex, "script")?).as_script(),
+        &ruleset,
+    )
+    .into_ts()
+    .map_err(err("response"))
 }
 
 #[wasm_bindgen]
@@ -436,7 +464,11 @@ pub fn taproot_output(req: Ts<TaprootRequest>) -> Result<Ts<TaprootView>, JsErro
         address: t.address.to_string(),
         script_pubkey: t.script_pubkey.to_hex_string(),
         leaf_hashes: t.leaf_hashes.iter().map(|h| h.to_string()).collect(),
-        control_blocks: t.control_blocks.iter().map(|c| c.serialize().to_lower_hex_string()).collect(),
+        control_blocks: t
+            .control_blocks
+            .iter()
+            .map(|c| c.serialize().to_lower_hex_string())
+            .collect(),
     }
     .into_ts()
     .map_err(err("response"))
@@ -466,7 +498,9 @@ pub fn execute(req: Ts<DebugRequest>) -> Result<Ts<DebugTrace>, JsError> {
 
 #[wasm_bindgen]
 pub fn sha256(data_hex: &str) -> Result<String, JsError> {
-    Ok(sha256::Hash::hash(&hex(data_hex, "data")?).to_byte_array().to_lower_hex_string())
+    Ok(sha256::Hash::hash(&hex(data_hex, "data")?)
+        .to_byte_array()
+        .to_lower_hex_string())
 }
 
 #[wasm_bindgen]
@@ -476,7 +510,9 @@ pub fn tagged_hash(tag: &str, data_hex: &str) -> Result<String, JsError> {
     e.input(t.as_byte_array());
     e.input(t.as_byte_array());
     e.input(&hex(data_hex, "data")?);
-    Ok(sha256::Hash::from_engine(e).to_byte_array().to_lower_hex_string())
+    Ok(sha256::Hash::from_engine(e)
+        .to_byte_array()
+        .to_lower_hex_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -488,7 +524,10 @@ pub fn tagged_hash(tag: &str, data_hex: &str) -> Result<String, JsError> {
 fn secret(hex_str: &str) -> Result<bitcoin::secp256k1::Keypair, JsError> {
     let bytes = hex(hex_str, "secret")?;
     let sk = bitcoin::secp256k1::SecretKey::from_slice(&bytes).map_err(err("secret"))?;
-    Ok(bitcoin::secp256k1::Keypair::from_secret_key(&Secp256k1::new(), &sk))
+    Ok(bitcoin::secp256k1::Keypair::from_secret_key(
+        &Secp256k1::new(),
+        &sk,
+    ))
 }
 
 /// The BIP-340 x-only public key for a secret.
@@ -516,7 +555,11 @@ pub fn sign_schnorr(secret_hex: &str, message_hex: &str) -> Result<String, JsErr
         bitcoin::secp256k1::ffi::secp256k1_schnorrsig_sign_custom(
             secp.ctx().as_ptr(),
             sig.as_mut_ptr(),
-            if msg.is_empty() { std::ptr::null() } else { msg.as_ptr() },
+            if msg.is_empty() {
+                std::ptr::null()
+            } else {
+                msg.as_ptr()
+            },
             msg.len(),
             kp.as_c_ptr(),
             &extra,
@@ -532,7 +575,11 @@ pub fn sign_schnorr(secret_hex: &str, message_hex: &str) -> Result<String, JsErr
 /// interpreter does for CSFS. Accepts a 64-byte signature, or 65 with a
 /// trailing sighash byte, which is ignored here.
 #[wasm_bindgen]
-pub fn verify_schnorr(pubkey_hex: &str, message_hex: &str, signature_hex: &str) -> Result<bool, JsError> {
+pub fn verify_schnorr(
+    pubkey_hex: &str,
+    message_hex: &str,
+    signature_hex: &str,
+) -> Result<bool, JsError> {
     let pk = XOnlyPublicKey::from_str(pubkey_hex.trim()).map_err(err("pubkey"))?;
     let msg = hex(message_hex, "message")?;
     let mut sig = hex(signature_hex, "signature")?;
@@ -540,7 +587,9 @@ pub fn verify_schnorr(pubkey_hex: &str, message_hex: &str, signature_hex: &str) 
         sig.pop();
     }
     if sig.len() != 64 {
-        return Err(JsError::new("signature: must be 64 bytes, or 65 with a hash type byte"));
+        return Err(JsError::new(
+            "signature: must be 64 bytes, or 65 with a hash type byte",
+        ));
     }
     // SAFETY: sig is checked to be 64 bytes, msg is a live slice whose
     // length is passed alongside it, null when empty as the C API requires.
@@ -548,7 +597,11 @@ pub fn verify_schnorr(pubkey_hex: &str, message_hex: &str, signature_hex: &str) 
         bitcoin::secp256k1::ffi::secp256k1_schnorrsig_verify(
             bitcoin::secp256k1::ffi::secp256k1_context_no_precomp,
             sig.as_ptr(),
-            if msg.is_empty() { std::ptr::null() } else { msg.as_ptr() },
+            if msg.is_empty() {
+                std::ptr::null()
+            } else {
+                msg.as_ptr()
+            },
             msg.len(),
             pk.as_c_ptr(),
         ) == 1
@@ -596,14 +649,26 @@ pub fn sighash(req: Ts<SighashRequest>) -> Result<Ts<SighashView>, JsError> {
     let tx: Transaction = deserialize(&hex(&req.tx, "tx")?).map_err(err("tx"))?;
     let idx = req.input_index as usize;
     if idx >= tx.input.len() {
-        return Err(JsError::new(&format!("input_index {idx} out of range for {} inputs", tx.input.len())));
+        return Err(JsError::new(&format!(
+            "input_index {idx} out of range for {} inputs",
+            tx.input.len()
+        )));
     }
     let prevouts: Vec<TxOut> = req
         .prevouts
         .iter()
-        .map(|p| Ok(TxOut { value: Amount::from_sat(p.value), script_pubkey: ScriptBuf::from(hex(&p.script_pubkey, "prevout script")?) }))
+        .map(|p| {
+            Ok(TxOut {
+                value: Amount::from_sat(p.value),
+                script_pubkey: ScriptBuf::from(hex(&p.script_pubkey, "prevout script")?),
+            })
+        })
         .collect::<Result<_, JsError>>()?;
-    let key_version = if req.hash_type & 0x40 != 0 { KeyVersion::Bip118 } else { KeyVersion::V0 };
+    let key_version = if req.hash_type & 0x40 != 0 {
+        KeyVersion::Bip118
+    } else {
+        KeyVersion::V0
+    };
     let leaf = ScriptBuf::from(hex(&req.leaf_script, "leaf_script")?);
     let leaf_hash = TapLeafHash::from_script(&leaf, LeafVersion::TapScript);
     // One prevout given for a single-input transaction, or one for this
@@ -615,19 +680,43 @@ pub fn sighash(req: Ts<SighashRequest>) -> Result<Ts<SighashView>, JsError> {
     } else if prevouts.is_empty() {
         Prevouts::None
     } else {
-        return Err(JsError::new(&format!("{} prevouts for {} inputs", prevouts.len(), tx.input.len())));
+        return Err(JsError::new(&format!(
+            "{} prevouts for {} inputs",
+            prevouts.len(),
+            tx.input.len()
+        )));
     };
-    let digest = script_spend_sighash(&tx, idx, prev, req.hash_type, key_version, leaf_hash, u32::MAX, None)
-        .map_err(|e| JsError::new(&format!("sighash: {e:?}")))?;
+    let digest = script_spend_sighash(
+        &tx,
+        idx,
+        prev,
+        req.hash_type,
+        key_version,
+        leaf_hash,
+        u32::MAX,
+        None,
+    )
+    .map_err(|e| JsError::new(&format!("sighash: {e:?}")))?;
     let preimage = covenants_core::sighash::script_spend_preimage(
-        &tx, idx, prev, req.hash_type, key_version, leaf_hash, u32::MAX, None,
+        &tx,
+        idx,
+        prev,
+        req.hash_type,
+        key_version,
+        leaf_hash,
+        u32::MAX,
+        None,
     )
     .map_err(|e| JsError::new(&format!("sighash: {e:?}")))?;
     SighashView {
         preimage: preimage.to_lower_hex_string(),
         sighash: digest.to_lower_hex_string(),
         hash_type: req.hash_type,
-        key_version: if key_version == KeyVersion::Bip118 { 1 } else { 0 },
+        key_version: if key_version == KeyVersion::Bip118 {
+            1
+        } else {
+            0
+        },
         tapleaf_hash: leaf_hash.to_byte_array().to_lower_hex_string(),
     }
     .into_ts()
@@ -662,7 +751,13 @@ pub struct OpcodeInfo {
     pub deployment: Option<String>,
 }
 
-fn entry(name: &str, alias: Option<&str>, category: &str, status: &str, deployment: Option<&str>) -> Option<OpcodeInfo> {
+fn entry(
+    name: &str,
+    alias: Option<&str>,
+    category: &str,
+    status: &str,
+    deployment: Option<&str>,
+) -> Option<OpcodeInfo> {
     let op = covenants_core::parse_opcode(name).ok()?;
     Some(OpcodeInfo {
         name: name.to_string(),
@@ -687,21 +782,59 @@ pub fn opcodes() -> Result<Ts<OpcodeCatalog>, JsError> {
         }
     };
 
-    for n in once("OP_0").chain((1..=16).map(|_| "")).enumerate().map(|(i, s)| if i == 0 { s.to_string() } else { format!("OP_{i}") }) {
+    for n in once("OP_0")
+        .chain((1..=16).map(|_| ""))
+        .enumerate()
+        .map(|(i, s)| {
+            if i == 0 {
+                s.to_string()
+            } else {
+                format!("OP_{i}")
+            }
+        })
+    {
         add(&n, None, "constants", "ok", None);
     }
-    add("OP_1NEGATE", Some("OP_PUSHNUM_NEG1"), "constants", "ok", None);
+    add(
+        "OP_1NEGATE",
+        Some("OP_PUSHNUM_NEG1"),
+        "constants",
+        "ok",
+        None,
+    );
 
     for (name, alias) in [
-        ("OP_TOALTSTACK", None), ("OP_FROMALTSTACK", None), ("OP_2DROP", None), ("OP_2DUP", None),
-        ("OP_3DUP", None), ("OP_2OVER", None), ("OP_2ROT", None), ("OP_2SWAP", None), ("OP_IFDUP", None),
-        ("OP_DEPTH", None), ("OP_DROP", None), ("OP_DUP", None), ("OP_NIP", None), ("OP_OVER", None),
-        ("OP_PICK", None), ("OP_ROLL", None), ("OP_ROT", None), ("OP_SWAP", None), ("OP_TUCK", None),
+        ("OP_TOALTSTACK", None),
+        ("OP_FROMALTSTACK", None),
+        ("OP_2DROP", None),
+        ("OP_2DUP", None),
+        ("OP_3DUP", None),
+        ("OP_2OVER", None),
+        ("OP_2ROT", None),
+        ("OP_2SWAP", None),
+        ("OP_IFDUP", None),
+        ("OP_DEPTH", None),
+        ("OP_DROP", None),
+        ("OP_DUP", None),
+        ("OP_NIP", None),
+        ("OP_OVER", None),
+        ("OP_PICK", None),
+        ("OP_ROLL", None),
+        ("OP_ROT", None),
+        ("OP_SWAP", None),
+        ("OP_TUCK", None),
     ] {
         add(name, alias, "stack", "ok", None);
     }
 
-    for name in ["OP_IF", "OP_NOTIF", "OP_ELSE", "OP_ENDIF", "OP_VERIFY", "OP_RETURN"] {
+    for name in [
+        "OP_IF",
+        "OP_NOTIF",
+        "OP_ELSE",
+        "OP_ENDIF",
+        "OP_VERIFY",
+        "OP_RETURN",
+    ] {
         add(name, None, "flow", "ok", None);
     }
 
@@ -710,35 +843,106 @@ pub fn opcodes() -> Result<Ts<OpcodeCatalog>, JsError> {
     add("OP_EQUALVERIFY", None, "compare", "ok", None);
 
     for name in [
-        "OP_1ADD", "OP_1SUB", "OP_NEGATE", "OP_ABS", "OP_NOT", "OP_0NOTEQUAL", "OP_ADD", "OP_SUB",
-        "OP_BOOLAND", "OP_BOOLOR", "OP_NUMEQUAL", "OP_NUMEQUALVERIFY", "OP_NUMNOTEQUAL",
-        "OP_LESSTHAN", "OP_GREATERTHAN", "OP_LESSTHANOREQUAL", "OP_GREATERTHANOREQUAL",
-        "OP_MIN", "OP_MAX", "OP_WITHIN",
+        "OP_1ADD",
+        "OP_1SUB",
+        "OP_NEGATE",
+        "OP_ABS",
+        "OP_NOT",
+        "OP_0NOTEQUAL",
+        "OP_ADD",
+        "OP_SUB",
+        "OP_BOOLAND",
+        "OP_BOOLOR",
+        "OP_NUMEQUAL",
+        "OP_NUMEQUALVERIFY",
+        "OP_NUMNOTEQUAL",
+        "OP_LESSTHAN",
+        "OP_GREATERTHAN",
+        "OP_LESSTHANOREQUAL",
+        "OP_GREATERTHANOREQUAL",
+        "OP_MIN",
+        "OP_MAX",
+        "OP_WITHIN",
     ] {
         add(name, None, "arithmetic", "ok", None);
     }
 
-    for name in ["OP_RIPEMD160", "OP_SHA1", "OP_SHA256", "OP_HASH160", "OP_HASH256", "OP_CODESEPARATOR"] {
+    for name in [
+        "OP_RIPEMD160",
+        "OP_SHA1",
+        "OP_SHA256",
+        "OP_HASH160",
+        "OP_HASH256",
+        "OP_CODESEPARATOR",
+    ] {
         add(name, None, "crypto", "ok", None);
     }
     add("OP_CHECKSIG", None, "crypto", "ok", None);
     add("OP_CHECKSIGVERIFY", None, "crypto", "ok", None);
     add("OP_CHECKSIGADD", None, "crypto", "ok", None);
 
-    add("OP_CHECKLOCKTIMEVERIFY", Some("OP_CLTV"), "locktime", "ok", None);
-    add("OP_CHECKSEQUENCEVERIFY", Some("OP_CSV"), "locktime", "ok", None);
+    add(
+        "OP_CHECKLOCKTIMEVERIFY",
+        Some("OP_CLTV"),
+        "locktime",
+        "ok",
+        None,
+    );
+    add(
+        "OP_CHECKSEQUENCEVERIFY",
+        Some("OP_CSV"),
+        "locktime",
+        "ok",
+        None,
+    );
 
-    add("OP_CHECKTEMPLATEVERIFY", Some("OP_CTV"), "covenants", "covenant", Some("ctv"));
-    add("OP_CHECKSIGFROMSTACK", Some("OP_CSFS"), "covenants", "covenant", Some("csfs"));
+    add(
+        "OP_CHECKTEMPLATEVERIFY",
+        Some("OP_CTV"),
+        "covenants",
+        "covenant",
+        Some("ctv"),
+    );
+    add(
+        "OP_CHECKSIGFROMSTACK",
+        Some("OP_CSFS"),
+        "covenants",
+        "covenant",
+        Some("csfs"),
+    );
     add("OP_CAT", None, "covenants", "covenant", Some("cat"));
-    add("OP_TEMPLATEHASH", Some("OP_TH"), "covenants", "covenant", Some("templatehash"));
-    add("OP_INTERNALKEY", None, "covenants", "covenant", Some("internalkey"));
+    add(
+        "OP_TEMPLATEHASH",
+        Some("OP_TH"),
+        "covenants",
+        "covenant",
+        Some("templatehash"),
+    );
+    add(
+        "OP_INTERNALKEY",
+        None,
+        "covenants",
+        "covenant",
+        Some("internalkey"),
+    );
 
     // Disabled before taproot, OP_SUCCESSx inside a tapscript: writing one
     // makes the whole script pass, which is never what an author means.
     for name in [
-        "OP_SUBSTR", "OP_LEFT", "OP_RIGHT", "OP_INVERT", "OP_AND", "OP_OR", "OP_XOR",
-        "OP_2MUL", "OP_2DIV", "OP_MUL", "OP_DIV", "OP_MOD", "OP_LSHIFT", "OP_RSHIFT",
+        "OP_SUBSTR",
+        "OP_LEFT",
+        "OP_RIGHT",
+        "OP_INVERT",
+        "OP_AND",
+        "OP_OR",
+        "OP_XOR",
+        "OP_2MUL",
+        "OP_2DIV",
+        "OP_MUL",
+        "OP_DIV",
+        "OP_MOD",
+        "OP_LSHIFT",
+        "OP_RSHIFT",
     ] {
         add(name, None, "op_success", "success", None);
     }
@@ -747,11 +951,15 @@ pub fn opcodes() -> Result<Ts<OpcodeCatalog>, JsError> {
     add("OP_CHECKMULTISIG", None, "legacy", "disallowed", None);
     add("OP_CHECKMULTISIGVERIFY", None, "legacy", "disallowed", None);
 
-    for name in ["OP_NOP", "OP_NOP1", "OP_NOP5", "OP_NOP6", "OP_NOP7", "OP_NOP8", "OP_NOP9", "OP_NOP10"] {
+    for name in [
+        "OP_NOP", "OP_NOP1", "OP_NOP5", "OP_NOP6", "OP_NOP7", "OP_NOP8", "OP_NOP9", "OP_NOP10",
+    ] {
         add(name, None, "nop", "ok", None);
     }
 
-    OpcodeCatalog { opcodes: out }.into_ts().map_err(err("response"))
+    OpcodeCatalog { opcodes: out }
+        .into_ts()
+        .map_err(err("response"))
 }
 
 // ---------------------------------------------------------------------------
@@ -780,7 +988,11 @@ pub fn template_hash_446(req: Ts<TemplateHashRequest>) -> Result<String, JsError
         Some(a) => Some(hex(a, "annex")?),
         None => None,
     };
-    let h = covenants_core::templatehash::template_hash(&tx, req.input_index as usize, annex.as_deref())
-        .map_err(|e| JsError::new(&format!("template hash: {e:?}")))?;
+    let h = covenants_core::templatehash::template_hash(
+        &tx,
+        req.input_index as usize,
+        annex.as_deref(),
+    )
+    .map_err(|e| JsError::new(&format!("template hash: {e:?}")))?;
     Ok(h.to_lower_hex_string())
 }

@@ -112,9 +112,7 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
     let input_index = req.input_index as usize;
 
     let tx: Transaction = match &req.tx {
-        Some(hex) => {
-            deserialize(&hex_bytes(hex, "tx")?).map_err(|e| format!("tx: {e}"))?
-        }
+        Some(hex) => deserialize(&hex_bytes(hex, "tx")?).map_err(|e| format!("tx: {e}"))?,
         None => Transaction {
             version: transaction::Version::TWO,
             lock_time: absolute::LockTime::ZERO,

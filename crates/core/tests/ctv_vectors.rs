@@ -6,7 +6,10 @@ use serde_json::Value;
 
 #[test]
 fn bip119_ctvhash_vectors() {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../spec/vectors/ctvhash.json");
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../spec/vectors/ctvhash.json"
+    );
     let data = std::fs::read_to_string(path).unwrap();
     let entries: Vec<Value> = serde_json::from_str(&data).unwrap();
 
@@ -27,7 +30,11 @@ fn bip119_ctvhash_vectors() {
             let idx = u32::try_from(idx.as_u64().unwrap()).unwrap();
             let want = Vec::<u8>::from_hex(results[i].as_str().unwrap()).unwrap();
             let got = default_template_hash(&tx, idx);
-            assert_eq!(got.as_slice(), want.as_slice(), "spend_index {idx} of {hex_tx}");
+            assert_eq!(
+                got.as_slice(),
+                want.as_slice(),
+                "spend_index {idx} of {hex_tx}"
+            );
             cases += 1;
         }
     }

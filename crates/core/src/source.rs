@@ -31,7 +31,13 @@ pub struct SourceError {
 
 impl fmt::Display for SourceError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "line {} word {}: {}", self.line + 1, self.word + 1, self.message)
+        write!(
+            f,
+            "line {} word {}: {}",
+            self.line + 1,
+            self.word + 1,
+            self.message
+        )
     }
 }
 
@@ -142,7 +148,11 @@ pub fn assemble(
             .or_else(|| origin.last())
             .copied()
             .unwrap_or((0, 0));
-        SourceError { line, word, message: explain(&e.kind) }
+        SourceError {
+            line,
+            word,
+            message: explain(&e.kind),
+        }
     })?;
     Ok(Assembled { script, resolved })
 }

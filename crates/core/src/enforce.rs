@@ -217,18 +217,35 @@ mod tests {
     /// *active* deployment fall through and be reported as anyone-can-spend.
     #[test]
     fn an_active_deployment_is_never_reported_as_op_success() {
-        let cat = Ruleset { cat: true, ..Ruleset::NONE };
+        let cat = Ruleset {
+            cat: true,
+            ..Ruleset::NONE
+        };
         let r = classify(&s("7e"), &cat);
         assert_eq!(r.status, Enforcement::Enforced);
-        assert!(r.inactive.is_empty(), "active OP_CAT reported as {:?}", r.inactive);
+        assert!(
+            r.inactive.is_empty(),
+            "active OP_CAT reported as {:?}",
+            r.inactive
+        );
 
-        let csfs = Ruleset { csfs: true, ..Ruleset::NONE };
+        let csfs = Ruleset {
+            csfs: true,
+            ..Ruleset::NONE
+        };
         let r = classify(&s("cc"), &csfs);
         assert_eq!(r.status, Enforcement::Enforced);
-        assert!(r.inactive.is_empty(), "active CSFS reported as {:?}", r.inactive);
+        assert!(
+            r.inactive.is_empty(),
+            "active CSFS reported as {:?}",
+            r.inactive
+        );
 
         // The whole merkle-proof leaf, under CAT: enforced, nothing inactive.
-        let leaf = classify(&s(&format!("a87c7ea8 20{} 87", "33".repeat(32)).replace(' ', "")), &cat);
+        let leaf = classify(
+            &s(&format!("a87c7ea8 20{} 87", "33".repeat(32)).replace(' ', "")),
+            &cat,
+        );
         assert_eq!(leaf.status, Enforcement::Enforced);
         assert!(leaf.inactive.is_empty());
     }
@@ -250,7 +267,10 @@ mod tests {
 
     #[test]
     fn apo_key_is_open_when_inactive() {
-        let r = classify(&s(&format!("21 01{} ac", "22".repeat(32)).replace(' ', "")), &Ruleset::NONE);
+        let r = classify(
+            &s(&format!("21 01{} ac", "22".repeat(32)).replace(' ', "")),
+            &Ruleset::NONE,
+        );
         assert_eq!(r.status, Enforcement::Open);
         assert_eq!(r.inactive, vec!["ANYPREVOUT"]);
         let r = classify(&s("51ac"), &Ruleset::NONE);

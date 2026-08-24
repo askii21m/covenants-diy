@@ -70,7 +70,9 @@ pub fn template_hash(
     msg.extend_from_slice(&(input_index as u32).to_le_bytes());
     if let Some(annex) = annex {
         msg.extend_from_slice(&sha256_of(|e| {
-            VarInt::from(annex.len()).consensus_encode(e).expect("engine write");
+            VarInt::from(annex.len())
+                .consensus_encode(e)
+                .expect("engine write");
             e.input(annex);
         }));
     }

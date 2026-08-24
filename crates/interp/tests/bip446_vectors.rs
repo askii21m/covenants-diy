@@ -13,7 +13,12 @@ use serde_json::Value;
 /// one and it starts with 0x50.
 fn split_witness(items: &[Vec<u8>]) -> (Vec<Vec<u8>>, Option<Vec<u8>>) {
     let mut items = items.to_vec();
-    let annex = if items.len() >= 2 && items.last().map(|l| l.first() == Some(&0x50)).unwrap_or(false) {
+    let annex = if items.len() >= 2
+        && items
+            .last()
+            .map(|l| l.first() == Some(&0x50))
+            .unwrap_or(false)
+    {
         items.pop()
     } else {
         None
@@ -36,7 +41,11 @@ fn run_case(case: &Value) -> Result<bool, String> {
         })
         .collect();
 
-    let witness: Vec<Vec<u8>> = tx.input[input_index].witness.iter().map(|b| b.to_vec()).collect();
+    let witness: Vec<Vec<u8>> = tx.input[input_index]
+        .witness
+        .iter()
+        .map(|b| b.to_vec())
+        .collect();
     let (mut stack, annex) = split_witness(&witness);
     // Script path: [inputs..., script, control block].
     let control = stack.pop().ok_or("no control block")?;
@@ -46,7 +55,10 @@ fn run_case(case: &Value) -> Result<bool, String> {
 
     let mut exec = Exec::new(
         ExecCtx::Tapscript,
-        Options { deployments: Deployments::default(), ..Default::default() },
+        Options {
+            deployments: Deployments::default(),
+            ..Default::default()
+        },
         TxTemplate {
             tx,
             prevouts,
@@ -71,7 +83,11 @@ fn run_case(case: &Value) -> Result<bool, String> {
 fn bip446_basics_vectors() {
     let raw = include_str!("../../core/tests/vectors/bip446-basics.json");
     let cases: Vec<Value> = serde_json::from_str(raw).expect("vectors parse");
-    assert!(cases.len() >= 19, "expected the published vector set, got {}", cases.len());
+    assert!(
+        cases.len() >= 19,
+        "expected the published vector set, got {}",
+        cases.len()
+    );
 
     let mut failures = Vec::new();
     for (i, case) in cases.iter().enumerate() {
@@ -82,11 +98,19 @@ fn bip446_basics_vectors() {
             Ok(got) => failures.push(format!("#{i} `{comment}`: got success={got}, want {want}")),
             // A case that should fail may fail before execution starts;
             // one that should pass may not.
-            Err(e) if !want => { let _ = e; }
+            Err(e) if !want => {
+                let _ = e;
+            }
             Err(e) => failures.push(format!("#{i} `{comment}`: {e}")),
         }
     }
-    assert!(failures.is_empty(), "{} of {} vectors failed:\n{}", failures.len(), cases.len(), failures.join("\n"));
+    assert!(
+        failures.is_empty(),
+        "{} of {} vectors failed:\n{}",
+        failures.len(),
+        cases.len(),
+        failures.join("\n")
+    );
 }
 
 /// The exhaustive suite, built on Bitcoin Core's taproot test framework.
@@ -118,7 +142,12 @@ fn run_asset(case: &Value, which: &str) -> Option<Result<bool, String>> {
 
     // A non-empty scriptSig means this is not a bare taproot spend, which
     // is the only shape this harness runs.
-    if spec.get("scriptSig").and_then(|s| s.as_str()).map(|s| !s.is_empty()).unwrap_or(false) {
+    if spec
+        .get("scriptSig")
+        .and_then(|s| s.as_str())
+        .map(|s| !s.is_empty())
+        .unwrap_or(false)
+    {
         return None;
     }
     let witness: Vec<Vec<u8>> = spec
@@ -143,7 +172,10 @@ fn run_asset(case: &Value, which: &str) -> Option<Result<bool, String>> {
 
     let exec = Exec::new(
         ExecCtx::Tapscript,
-        Options { deployments, ..Default::default() },
+        Options {
+            deployments,
+            ..Default::default()
+        },
         TxTemplate {
             tx,
             prevouts,
@@ -170,24 +202,45 @@ fn run_asset(case: &Value, which: &str) -> Option<Result<bool, String>> {
 fn bip446_script_assets_vectors() {
     let raw = include_str!("../../core/tests/vectors/bip446-assets.json");
     let cases: Vec<Value> = serde_json::from_str(raw).expect("vectors parse");
-    assert!(cases.len() > 300, "expected the published suite, got {}", cases.len());
+    assert!(
+        cases.len() > 300,
+        "expected the published suite, got {}",
+        cases.len()
+    );
 
     let (mut ran, mut failures) = (0usize, Vec::new());
     for (i, case) in cases.iter().enumerate() {
         let comment = case["comment"].as_str().unwrap_or("");
         for (which, want) in [("success", true), ("failure", false)] {
-            let Some(result) = run_asset(case, which) else { continue };
+            let Some(result) = run_asset(case, which) else {
+                continue;
+            };
             ran += 1;
             match result {
                 Ok(got) if got == want => {}
                 // A case meant to fail may be rejected before execution.
                 Err(_) if !want => {}
-                Ok(got) => failures.push(format!("#{i} {which} `{comment}`: success={got}, want {want}")),
+                Ok(got) => failures.push(format!(
+                    "#{i} {which} `{comment}`: success={got}, want {want}"
+                )),
                 Err(e) => failures.push(format!("#{i} {which} `{comment}`: {e}")),
             }
         }
     }
-    println!("ran {ran} taproot script-path cases from {} vectors", cases.len());
+    println!(
+        "ran {ran} taproot script-path cases from {} vectors",
+        cases.len()
+    );
     assert!(ran > 400, "harness skipped too much: only ran {ran}");
-    assert!(failures.is_empty(), "{} failed:\n{}", failures.len(), failures.iter().take(20).cloned().collect::<Vec<_>>().join("\n"));
+    assert!(
+        failures.is_empty(),
+        "{} failed:\n{}",
+        failures.len(),
+        failures
+            .iter()
+            .take(20)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
 }

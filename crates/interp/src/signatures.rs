@@ -159,8 +159,8 @@ impl Exec {
         )
         .map_err(|_| ExecError::SchnorrSigHashtype)?;
 
-        let sig = secp256k1::schnorr::Signature::from_slice(sig64)
-            .map_err(|_| ExecError::SchnorrSig)?;
+        let sig =
+            secp256k1::schnorr::Signature::from_slice(sig64).map_err(|_| ExecError::SchnorrSig)?;
         let msg = secp256k1::Message::from_digest(digest);
         if SECP.verify_schnorr(&sig, &msg, &xonly).is_err() {
             return Err(ExecError::SchnorrSig);
@@ -169,7 +169,12 @@ impl Exec {
     }
 
     /// BIP-348 verification: BIP-340 over the raw message.
-    pub fn check_csfs_schnorr(&mut self, sig: &[u8], msg: &[u8], pk: &[u8]) -> Result<(), ExecError> {
+    pub fn check_csfs_schnorr(
+        &mut self,
+        sig: &[u8],
+        msg: &[u8],
+        pk: &[u8],
+    ) -> Result<(), ExecError> {
         debug_assert_eq!(pk.len(), 32);
         if sig.len() != 64 {
             return Err(ExecError::SchnorrSigSize);

@@ -43,11 +43,7 @@ pub fn parse_opcode(s: &str) -> Result<Opcode, ()> {
 
         // Match both with and without OP_ prefix for all other opcodes
         s => {
-            let opcode_name = if s.starts_with("OP_") {
-                &s[3..]
-            } else {
-                s
-            };
+            let opcode_name = if s.starts_with("OP_") { &s[3..] } else { s };
 
             match opcode_name {
                 "PUSHBYTES_0" => Ok(OP_PUSHBYTES_0),
@@ -376,10 +372,7 @@ mod tests {
         assert_eq!(parse_opcode("OP_CHECKTEMPLATEVERIFY").unwrap(), OP_NOP4);
         assert_eq!(parse_opcode("CTV").unwrap(), OP_NOP4);
         assert_eq!(parse_opcode("OP_NOP4").unwrap(), OP_NOP4);
-        assert_eq!(
-            parse_opcode("OP_CHECKSIGFROMSTACK").unwrap(),
-            OP_RETURN_204
-        );
+        assert_eq!(parse_opcode("OP_CHECKSIGFROMSTACK").unwrap(), OP_RETURN_204);
         assert_eq!(parse_opcode("CSFS").unwrap(), OP_RETURN_204);
         assert_eq!(parse_opcode("OP_RETURN_204").unwrap(), OP_RETURN_204);
     }

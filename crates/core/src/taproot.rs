@@ -98,9 +98,15 @@ mod tests {
                 s
             ));
         }
-        assert_eq!(t.leaf_hashes[0], TapLeafHash::from_script(&leaves[0], LeafVersion::TapScript));
+        assert_eq!(
+            t.leaf_hashes[0],
+            TapLeafHash::from_script(&leaves[0], LeafVersion::TapScript)
+        );
         assert!(t.spend_info.merkle_root().is_some());
-        assert_ne!(t.spend_info.merkle_root().unwrap().to_byte_array(), [0u8; 32]);
+        assert_ne!(
+            t.spend_info.merkle_root().unwrap().to_byte_array(),
+            [0u8; 32]
+        );
     }
 
     #[test]
@@ -115,6 +121,9 @@ mod tests {
     fn duplicate_leaf_is_rejected() {
         let secp = Secp256k1::new();
         let s = ScriptBuf::from(vec![0x51]);
-        assert_eq!(build(&secp, Network::Signet, None, &[s.clone(), s]).unwrap_err(), TaprootError::Tree);
+        assert_eq!(
+            build(&secp, Network::Signet, None, &[s.clone(), s]).unwrap_err(),
+            TaprootError::Tree
+        );
     }
 }

@@ -84,7 +84,14 @@ pub fn script_spend_sighash(
     annex: Option<&[u8]>,
 ) -> Result<[u8; 32], SighashError> {
     let msg = script_spend_preimage(
-        tx, input_index, prevouts, hash_type, key_version, tapleaf_hash, codesep_pos, annex,
+        tx,
+        input_index,
+        prevouts,
+        hash_type,
+        key_version,
+        tapleaf_hash,
+        codesep_pos,
+        annex,
     )?;
     let mut engine = TapSighash::engine();
     engine.input(&msg);
@@ -195,7 +202,9 @@ pub fn script_spend_preimage(
 
     if let Some(annex) = annex {
         msg.extend_from_slice(&sha256_concat(|e| {
-            VarInt::from(annex.len()).consensus_encode(e).expect("engine write");
+            VarInt::from(annex.len())
+                .consensus_encode(e)
+                .expect("engine write");
             e.input(annex);
         }));
     }

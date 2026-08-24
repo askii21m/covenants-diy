@@ -86,10 +86,7 @@ fn differential_against_rust_bitcoin() {
                             TapSighashType::from_consensus_u8(ht).unwrap(),
                         );
                         if ht & 0x03 == 0x03 && input_index >= n_out {
-                            assert_eq!(
-                                ours,
-                                Err(SighashError::SingleWithoutCorrespondingOutput)
-                            );
+                            assert_eq!(ours, Err(SighashError::SingleWithoutCorrespondingOutput));
                             assert!(theirs.is_err());
                         } else {
                             assert_eq!(
@@ -201,32 +198,74 @@ fn apo_commits_to_amount_and_script_apoas_does_not() {
     fat_prevout.value = Amount::from_sat(999_999);
 
     let apo_a = script_spend_sighash(
-        &tx, 0, Prevouts::One(0, &prevouts[0]), 0x41, KeyVersion::Bip118, leaf(), u32::MAX, None,
+        &tx,
+        0,
+        Prevouts::One(0, &prevouts[0]),
+        0x41,
+        KeyVersion::Bip118,
+        leaf(),
+        u32::MAX,
+        None,
     )
     .unwrap();
     let apo_b = script_spend_sighash(
-        &tx, 0, Prevouts::One(0, &fat_prevout), 0x41, KeyVersion::Bip118, leaf(), u32::MAX, None,
+        &tx,
+        0,
+        Prevouts::One(0, &fat_prevout),
+        0x41,
+        KeyVersion::Bip118,
+        leaf(),
+        u32::MAX,
+        None,
     )
     .unwrap();
     assert_ne!(apo_a, apo_b);
 
     let apoas_a = script_spend_sighash(
-        &tx, 0, Prevouts::None, 0xc1, KeyVersion::Bip118, leaf(), u32::MAX, None,
+        &tx,
+        0,
+        Prevouts::None,
+        0xc1,
+        KeyVersion::Bip118,
+        leaf(),
+        u32::MAX,
+        None,
     )
     .unwrap();
     let other_leaf = TapLeafHash::from_script(&ScriptBuf::from(vec![0x52]), LeafVersion::TapScript);
     let apoas_b = script_spend_sighash(
-        &tx, 0, Prevouts::None, 0xc1, KeyVersion::Bip118, other_leaf, u32::MAX, None,
+        &tx,
+        0,
+        Prevouts::None,
+        0xc1,
+        KeyVersion::Bip118,
+        other_leaf,
+        u32::MAX,
+        None,
     )
     .unwrap();
     assert_eq!(apoas_a, apoas_b);
 
     let apo_leaf_a = script_spend_sighash(
-        &tx, 0, Prevouts::One(0, &prevouts[0]), 0x41, KeyVersion::Bip118, leaf(), u32::MAX, None,
+        &tx,
+        0,
+        Prevouts::One(0, &prevouts[0]),
+        0x41,
+        KeyVersion::Bip118,
+        leaf(),
+        u32::MAX,
+        None,
     )
     .unwrap();
     let apo_leaf_b = script_spend_sighash(
-        &tx, 0, Prevouts::One(0, &prevouts[0]), 0x41, KeyVersion::Bip118, other_leaf, u32::MAX, None,
+        &tx,
+        0,
+        Prevouts::One(0, &prevouts[0]),
+        0x41,
+        KeyVersion::Bip118,
+        other_leaf,
+        u32::MAX,
+        None,
     )
     .unwrap();
     assert_ne!(apo_leaf_a, apo_leaf_b);
@@ -236,18 +275,39 @@ fn apo_commits_to_amount_and_script_apoas_does_not() {
 fn apoas_still_commits_to_codesep_and_sequence() {
     let (mut tx, _) = fixture(1, 1);
     let a = script_spend_sighash(
-        &tx, 0, Prevouts::None, 0xc1, KeyVersion::Bip118, leaf(), u32::MAX, None,
+        &tx,
+        0,
+        Prevouts::None,
+        0xc1,
+        KeyVersion::Bip118,
+        leaf(),
+        u32::MAX,
+        None,
     )
     .unwrap();
     let b = script_spend_sighash(
-        &tx, 0, Prevouts::None, 0xc1, KeyVersion::Bip118, leaf(), 12, None,
+        &tx,
+        0,
+        Prevouts::None,
+        0xc1,
+        KeyVersion::Bip118,
+        leaf(),
+        12,
+        None,
     )
     .unwrap();
     assert_ne!(a, b);
 
     tx.input[0].sequence = Sequence(0x1234);
     let c = script_spend_sighash(
-        &tx, 0, Prevouts::None, 0xc1, KeyVersion::Bip118, leaf(), u32::MAX, None,
+        &tx,
+        0,
+        Prevouts::None,
+        0xc1,
+        KeyVersion::Bip118,
+        leaf(),
+        u32::MAX,
+        None,
     )
     .unwrap();
     assert_ne!(a, c);
@@ -257,11 +317,25 @@ fn apoas_still_commits_to_codesep_and_sequence() {
 fn key_version_separates_digests() {
     let (tx, prevouts) = fixture(1, 1);
     let v0 = script_spend_sighash(
-        &tx, 0, Prevouts::All(&prevouts), 0x01, KeyVersion::V0, leaf(), u32::MAX, None,
+        &tx,
+        0,
+        Prevouts::All(&prevouts),
+        0x01,
+        KeyVersion::V0,
+        leaf(),
+        u32::MAX,
+        None,
     )
     .unwrap();
     let v118 = script_spend_sighash(
-        &tx, 0, Prevouts::All(&prevouts), 0x01, KeyVersion::Bip118, leaf(), u32::MAX, None,
+        &tx,
+        0,
+        Prevouts::All(&prevouts),
+        0x01,
+        KeyVersion::Bip118,
+        leaf(),
+        u32::MAX,
+        None,
     )
     .unwrap();
     assert_ne!(v0, v118);
@@ -272,18 +346,39 @@ fn hash_type_validity() {
     let (tx, prevouts) = fixture(1, 1);
     for ht in [0x40u8, 0xc0, 0x04, 0x80, 0x44, 0xff] {
         let r = script_spend_sighash(
-            &tx, 0, Prevouts::All(&prevouts), ht, KeyVersion::Bip118, leaf(), u32::MAX, None,
+            &tx,
+            0,
+            Prevouts::All(&prevouts),
+            ht,
+            KeyVersion::Bip118,
+            leaf(),
+            u32::MAX,
+            None,
         );
         assert_eq!(r, Err(SighashError::InvalidHashType(ht)), "ht {ht:#x}");
     }
     for ht in [0x41u8, 0x42, 0x43, 0xc1, 0xc2, 0xc3] {
         let r = script_spend_sighash(
-            &tx, 0, Prevouts::All(&prevouts), ht, KeyVersion::V0, leaf(), u32::MAX, None,
+            &tx,
+            0,
+            Prevouts::All(&prevouts),
+            ht,
+            KeyVersion::V0,
+            leaf(),
+            u32::MAX,
+            None,
         );
         assert_eq!(r, Err(SighashError::InvalidHashType(ht)), "ht {ht:#x}");
     }
     let apo_single = script_spend_sighash(
-        &tx, 0, Prevouts::All(&prevouts), 0x43, KeyVersion::Bip118, leaf(), u32::MAX, None,
+        &tx,
+        0,
+        Prevouts::All(&prevouts),
+        0x43,
+        KeyVersion::Bip118,
+        leaf(),
+        u32::MAX,
+        None,
     );
     assert!(apo_single.is_ok());
 }

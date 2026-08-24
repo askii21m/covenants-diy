@@ -211,13 +211,7 @@ fn csfs_unknown_key_type_succeeds() {
         .push_slice([9u8; 31])
         .push_opcode(OP_RETURN_204)
         .into_script();
-    let res = run_tapscript(
-        script,
-        vec![vec![0xde; 64], vec![0xad; 5]],
-        tx,
-        prevouts,
-    )
-    .unwrap();
+    let res = run_tapscript(script, vec![vec![0xde; 64], vec![0xad; 5]], tx, prevouts).unwrap();
     assert!(res.success, "{:?}", res.error);
     assert_eq!(res.final_stack.get(0), vec![1]);
 }
@@ -248,9 +242,15 @@ fn csfs_bip340_vectors_including_varlen_messages() {
             continue;
         }
         let (pk_hex, msg_hex, sig_hex, expect) = (cols[2], cols[4], cols[5], cols[6]);
-        let Ok(pk) = Vec::<u8>::from_hex(pk_hex) else { continue };
-        let Ok(msg) = Vec::<u8>::from_hex(msg_hex) else { continue };
-        let Ok(sig) = Vec::<u8>::from_hex(sig_hex) else { continue };
+        let Ok(pk) = Vec::<u8>::from_hex(pk_hex) else {
+            continue;
+        };
+        let Ok(msg) = Vec::<u8>::from_hex(msg_hex) else {
+            continue;
+        };
+        let Ok(sig) = Vec::<u8>::from_hex(sig_hex) else {
+            continue;
+        };
         if pk.len() != 32 {
             continue;
         }
