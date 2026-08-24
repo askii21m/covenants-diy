@@ -41,6 +41,9 @@ function Field({ port, value, onChange }: { port: Port; value: unknown; onChange
   const parse = (v: string) => (port.field === "number" ? Number(v.replace(/[\s,_]/g, "")) : v.trim());
   useEffect(() => {
     if (!focused) setDraft(shown(value));
+    // shown is rebuilt every render, so listing it would re-run this on every
+    // render and overwrite whatever is being typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, focused]);
   useEffect(() => () => clearTimeout(timer.current), []);
   const commit = (v: string) => {
@@ -103,6 +106,17 @@ function CovNodeImpl({ id, data, selected }: NodeProps<FlowNode>) {
   const edges = useStore((s) => s.edges);
   const allComputed = useStore((s) => s.computed);
   const setField = useStore((s) => s.setField);
+  const renaming = useStore((s) => s.renaming === id);
+  const setRenaming = useStore((s) => s.setRenaming);
+  const setPinMenu = useStore((s) => s.setPinMenu);
+  // While a wire is being dragged, the pins it cannot land on step back so
+  // the ones it can are the only bright things on the canvas.
+  const connecting = useStore((s) => s.connecting);
+  const breakWires = useStore((s) => s.breakWires);
+  // Every hook above runs for every node. A kind the registry does not know
+  // still has to get past them, because React tells hooks apart by the order
+  // they are called in and an early return here would shorten that order for
+  // one node and not its siblings.
   if (!kind) return <div className="cov err">unknown node</div>;
 
   const inputs = kind.inputs(data);
@@ -126,15 +140,8 @@ function CovNodeImpl({ id, data, selected }: NodeProps<FlowNode>) {
     }
 
   const collapsed = Boolean(data.collapsed);
-  const renaming = useStore((s) => s.renaming === id);
-  const setRenaming = useStore((s) => s.setRenaming);
-  const setPinMenu = useStore((s) => s.setPinMenu);
-  // While a wire is being dragged, the pins it cannot land on step back so
-  // the ones it can are the only bright things on the canvas.
-  const connecting = useStore((s) => s.connecting);
   const dim = (p: Port, side: "source" | "target") =>
     connecting && !reachableFrom(connecting, id, p, side) ? " off" : "";
-  const breakWires = useStore((s) => s.breakWires);
   // React Flow starts a wire on mousedown; the alt guard sits on both the
   // pointer and the mouse event so it does not rely on a cancelled
   // pointerdown suppressing the compat mousedown.
