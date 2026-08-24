@@ -32,7 +32,6 @@ jobs:
     # [env] yields to a variable already set, so these win here.
     env:
       CC_wasm32_unknown_unknown: clang
-      AR_wasm32_unknown_unknown: llvm-ar
     defaults:
       run:
         working-directory: web
@@ -54,6 +53,13 @@ jobs:
             ~/.cargo/bin
             target
           key: wasm-${{ hashFiles('Cargo.lock') }}
+      - name: Find the runner's llvm-ar
+        run: |
+          AR="$(command -v llvm-ar || true)"
+          [ -n "$AR" ] || AR="$(ls -1 /usr/bin/llvm-ar-* 2>/dev/null | sort -V | tail -1 || true)"
+          if [ -z "$AR" ]; then sudo apt-get update -qq && sudo apt-get install -y llvm; AR="$(command -v llvm-ar)"; fi
+          echo "using $AR"
+          echo "AR_wasm32_unknown_unknown=$AR" >> "$GITHUB_ENV"
       - name: Install wasm-pack
         run: command -v wasm-pack || cargo install wasm-pack --locked
       - run: npm ci
