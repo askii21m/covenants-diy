@@ -869,9 +869,15 @@ export function recursive(): Example {
     "# Rebuild the message this signature",
     "# signs, from the witness pieces.",
     "OP_TOALTSTACK          # tail",
-    "OP_DUP OP_TOALTSTACK   # our own spk",
+    "# The spk is kept twice over: once as",
+    "# the output we pay to, once as the",
+    "# input we spend. That is the loop.",
+    "OP_DUP OP_TOALTSTACK",
     "OP_SWAP OP_TOALTSTACK  # middle",
-    "OP_CAT OP_SHA256       # one output",
+    "# Bytes 10 to 41 of the message are",
+    "# the outputs hash. The script works",
+    "# it out rather than be handed it.",
+    "OP_CAT OP_SHA256",
     "OP_CAT",
     "OP_FROMALTSTACK OP_CAT",
     "OP_FROMALTSTACK OP_CAT",
@@ -896,11 +902,11 @@ export function recursive(): Example {
   // --- the six pieces, in the order the script pops them -----------------
   const PITCH = 291;                     // a slice plus a gap
   const signature = node("signature", "sign", col(9), BOT + 0 * PITCH, { hash_type: 0 });
-  const head = node("head", "slice", col(9), BOT + 1 * PITCH, { offset: 0, length: 10 });
+  const head = node("head", "slice", col(9), BOT + 1 * PITCH, { name: "version_locktime", offset: 0, length: 10 });
   const outValue = node("out_value", "le_bytes", col(9), BOT + 2 * PITCH, { value: 99_000, width: 8 });
-  const middle = node("middle", "slice", col(9), BOT + 3 * PITCH, { offset: 42, length: 45 });
+  const middle = node("middle", "slice", col(9), BOT + 3 * PITCH, { name: "outpoint_amount", offset: 42, length: 45 });
   const ownSpk = node("own_spk", "slice", col(9), BOT + 4 * PITCH, { offset: 87, length: 35 });
-  const tail = node("tail", "slice", col(9), BOT + 5 * PITCH, { offset: 122, length: 41 });
+  const tail = node("tail", "slice", col(9), BOT + 5 * PITCH, { name: "sequence_and_leaf", offset: 122, length: 41 });
   nodes.push(signature, head, outValue, middle, ownSpk, tail);
 
   // Everything either side of that column is centred on it, so the fan out
@@ -972,7 +978,7 @@ export function recursive(): Example {
       ["covenant", "vault", "next"]),
     around("c_funded", "Paid in", "slate", nodes, ["funding"]),
     around("c_msg", "The message it signs", "blue", nodes, ["unsigned", "message"]),
-    around("c_pieces", "Six pieces", "amber", nodes,
+    around("c_pieces", "Four slices, and the outputs it works out itself", "amber", nodes,
       ["signature", "head", "out_value", "middle", "own_spk", "tail"]),
     around("c_back", "Put back together", "green", nodes,
       ["witness", "spend_tx", "check"]),
@@ -1021,9 +1027,11 @@ export function catonly(): Example {
   const pinned = node("pinned_output", "sha256", col(2), 700, {});
 
   const covenant = node("covenant", "tapscript", col(3), 0, { source: [
-    "# Rebuild the message this input signs,",
-    "# with the one output we allow pinned.",
+    "# Rebuild the message this input signs.",
     "@sigtag OP_SWAP OP_CAT",
+    "# Bytes 138 to 169 are the outputs",
+    "# hash. It comes from here, not from",
+    "# the spender. That is the covenant.",
     "@pinned OP_CAT",
     "OP_SWAP OP_CAT OP_SHA256",
     "# The BIP-340 challenge over it, with",
@@ -1046,9 +1054,9 @@ export function catonly(): Example {
 
   // --- the message, and the three pieces the witness carries -------------
   const PITCH = 291;
-  const eHead = node("e_head", "slice", col(10), BOT + 0 * PITCH, { offset: 0, length: 31 });
-  const head = node("head", "slice", col(10), BOT + 1 * PITCH, { offset: 0, length: 138 });
-  const tail = node("tail", "slice", col(10), BOT + 2 * PITCH, { offset: 170, length: 42 });
+  const eHead = node("e_head", "slice", col(10), BOT + 0 * PITCH, { name: "challenge_head", offset: 0, length: 31 });
+  const head = node("head", "slice", col(10), BOT + 1 * PITCH, { name: "before_outputs", offset: 0, length: 138 });
+  const tail = node("tail", "slice", col(10), BOT + 2 * PITCH, { name: "after_outputs", offset: 170, length: 42 });
   nodes.push(eHead, head, tail);
 
   const TALL = 2 * PITCH + 235;
@@ -1127,7 +1135,7 @@ export function catonly(): Example {
     around("c_cov", "No CSFS anywhere", "rose", nodes, ["covenant", "coin", "spend"]),
     around("c_funded", "Paid in", "slate", nodes, ["funding"]),
     around("c_msg", "The message, and the challenge over it", "blue", nodes, ["unsigned", "message", "challenge", "e"]),
-    around("c_pieces", "Three pieces", "amber", nodes, ["e_head", "head", "tail"]),
+    around("c_pieces", "Either side of the outputs hash, and the challenge", "amber", nodes, ["e_head", "head", "tail"]),
     around("c_back", "Put back together", "green", nodes, ["witness", "spend_tx", "check"]),
   );
   return { nodes, edges, network: "signet", ruleset: "cat", select: "covenant" };
