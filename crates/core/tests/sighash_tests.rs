@@ -24,7 +24,7 @@ fn fixture(n_in: usize, n_out: usize) -> (Transaction, Vec<TxOut>) {
             witness: Witness::new(),
         });
         let mut spk = vec![0x51, 0x20];
-        spk.extend(std::iter::repeat(i as u8 + 0x30).take(32));
+        spk.extend(std::iter::repeat_n(i as u8 + 0x30, 32));
         prevouts.push(TxOut {
             value: Amount::from_sat(100_000 + i as u64 * 7),
             script_pubkey: ScriptBuf::from(spk),
@@ -33,7 +33,7 @@ fn fixture(n_in: usize, n_out: usize) -> (Transaction, Vec<TxOut>) {
     let mut outputs = Vec::new();
     for o in 0..n_out {
         let mut spk = vec![0x51, 0x20];
-        spk.extend(std::iter::repeat(o as u8 + 0x60).take(32));
+        spk.extend(std::iter::repeat_n(o as u8 + 0x60, 32));
         outputs.push(TxOut {
             value: Amount::from_sat(50_000 + o as u64 * 11),
             script_pubkey: ScriptBuf::from(spk),

@@ -43,7 +43,7 @@ pub fn parse_opcode(s: &str) -> Result<Opcode, ()> {
 
         // Match both with and without OP_ prefix for all other opcodes
         s => {
-            let opcode_name = if s.starts_with("OP_") { &s[3..] } else { s };
+            let opcode_name = s.strip_prefix("OP_").unwrap_or(s);
 
             match opcode_name {
                 "PUSHBYTES_0" => Ok(OP_PUSHBYTES_0),
