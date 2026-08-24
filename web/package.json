@@ -11,7 +11,8 @@
     "wasm": "wasm-pack build ../crates/wasm --target web --out-dir ../../web/pkg --out-name covenants",
     "test": "vitest run && vitest run --config vitest.node.config.ts",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -28,12 +29,17 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260823.1",
+    "@eslint/js": "^10.0.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4",
+    "eslint": "^10.9.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.11.0",
     "jsdom": "^26.1.0",
     "prettier": "^3.9.6",
     "typescript": "^5",
+    "typescript-eslint": "^8.67.0",
     "vite": "^6",
     "vitest": "^3.2.7",
     "wrangler": "^4.125.0"

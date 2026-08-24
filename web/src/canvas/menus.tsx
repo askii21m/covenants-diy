@@ -98,7 +98,10 @@ export function ContextMenu({
 
   const top = useMemo(() => live(items), [items]);
   const kids = sub ? (items[sub.at]?.submenu ?? []) : [];
-  const inner = useMemo(() => live(kids), [kids]);
+  // kids is a fresh array each render, so this memo is keyed on the panel that
+  // is open rather than on the array identity.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const inner = useMemo(() => live(kids), [sub?.at, items]);
 
   // Off the panel's outer edge, not the row's: a row is inset by the
   // panel's padding, so hanging the submenu from it puts the submenu on

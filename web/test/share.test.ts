@@ -1,7 +1,7 @@
 // A permalink is untrusted input from anyone who can send a URL, so these
 // cover the round trip and the ways a link could be hostile rather than
 // merely wrong.
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
 import { deflateRawSync } from "node:zlib";
 import init from "../pkg/covenants.js";

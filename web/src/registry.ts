@@ -360,7 +360,7 @@ const transaction: NodeKind = {
         template: tpl,
         prevouts,
         witnesses,
-        prevout_values: values as (number | null)[] as any,
+        prevout_values: values.map((v) => v ?? undefined),
       });
       const out: Record<string, Value> = { hex: v.hex, txid: v.txid };
       v.outpoints.forEach((o, j) => (out[`outpoint${j}`] = o));

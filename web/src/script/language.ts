@@ -48,7 +48,7 @@ export function byName(): Map<string, Opcode> {
 
 const WORD = /[A-Za-z0-9_]/;
 
-export const tapscript = StreamLanguage.define<{}>({
+export const tapscript = StreamLanguage.define<Record<string, never>>({
   name: "tapscript",
   token(stream) {
     if (stream.eatSpace()) return null;
