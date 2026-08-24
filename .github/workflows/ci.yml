@@ -27,6 +27,12 @@ jobs:
 
   web:
     runs-on: ubuntu-latest
+    # .cargo/config.toml points the wasm32 C compiler at Homebrew LLVM, which
+    # is what an Apple Silicon machine needs and no CI runner has. Cargo's
+    # [env] yields to a variable already set, so these win here.
+    env:
+      CC_wasm32_unknown_unknown: clang
+      AR_wasm32_unknown_unknown: llvm-ar
     defaults:
       run:
         working-directory: web

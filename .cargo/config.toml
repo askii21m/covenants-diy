@@ -1,4 +1,7 @@
-# Apple clang has no wasm32 backend; secp256k1's C code needs homebrew LLVM.
+# Apple clang has no wasm32 backend, so secp256k1's C code needs Homebrew
+# LLVM. These are the Apple Silicon paths; set CC_wasm32_unknown_unknown and
+# AR_wasm32_unknown_unknown in your environment to override them, which is
+# what CI and an Intel Mac do, because [env] yields to a variable already set.
 [env]
 CC_wasm32_unknown_unknown = "/opt/homebrew/opt/llvm/bin/clang"
 AR_wasm32_unknown_unknown = "/opt/homebrew/opt/llvm/bin/llvm-ar"
