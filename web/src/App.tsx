@@ -87,7 +87,7 @@ function TopBar({ openMenu, open }: { openMenu: OpenMenu; open: MenuName | null 
   };
   return (
     <header className="top">
-      <div className="mark">
+      <h1 className="mark">
         {/* The favicon, inline so it takes the header's own scale. */}
         <svg className="logo" viewBox="0 0 32 32" width="19" height="19" aria-hidden="true" focusable="false">
           <rect width="32" height="32" rx="7.5" fill="#0F766E" />
@@ -102,7 +102,8 @@ function TopBar({ openMenu, open }: { openMenu: OpenMenu; open: MenuName | null 
           </g>
         </svg>
         covenants.diy
-      </div>
+        <span className="sr-only"> · Bitcoin covenant development environment</span>
+      </h1>
       <nav className="acts" role="menubar">
         {(["file", "edit", "view"] as const).map((which) => (
           <button
