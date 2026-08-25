@@ -18,6 +18,8 @@ export interface MenuItem {
   submenu?: MenuItem[];
   /** Drawn with a tick, for the things View turns on and off. */
   checked?: boolean;
+  /** Stay open after a pick, for a row of switches you set several of. */
+  keepOpen?: boolean;
 }
 
 /** The gap between a panel and its submenu, and the padding inside a panel,
@@ -63,11 +65,14 @@ export function ContextMenu({
   items,
   onClose,
   ignore,
+  className,
 }: {
   x: number;
   y: number;
   items: MenuItem[];
   onClose: () => void;
+  /** Extra class on the panel, for a menu whose rows need more room. */
+  className?: string;
   /** The element that opened the menu: a press on it does not count as
    *  outside, so the trigger can toggle the menu closed. */
   ignore?: HTMLElement | null;
@@ -188,7 +193,7 @@ export function ContextMenu({
           if (hit) {
             e.preventDefault();
             hit.it.onClick?.();
-            onClose();
+            if (!hit.it.keepOpen) onClose();
           }
           return;
         }
@@ -225,7 +230,7 @@ export function ContextMenu({
           return;
         }
         hit.it.onClick?.();
-        onClose();
+        if (!hit.it.keepOpen) onClose();
       }
     };
     window.addEventListener("mousedown", onDown, true);
@@ -253,7 +258,7 @@ export function ContextMenu({
   }, [x, y, items.length]);
   return (
     <div
-      className="menu"
+      className={`menu ${className ?? ""}`}
       ref={ref}
       style={{ left: pos.x, top: pos.y }}
       role="menu"
@@ -288,7 +293,7 @@ export function ContextMenu({
                 return;
               }
               it.onClick?.();
-              onClose();
+              if (!it.keepOpen) onClose();
             }}
           />
         ),
