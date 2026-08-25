@@ -67,44 +67,47 @@ function panel(title: string, body: string, note?: string, noteClass = "cm-doc-n
 
 /** Hovering a word says what it is: an opcode's meaning, or what a
  *  reference currently carries. */
-export const hover = hoverTooltip((view, pos): Tooltip | null => {
-  const line = view.state.doc.lineAt(pos);
-  const offset = pos - line.from;
-  if (line.text.slice(0, offset).includes("#")) return null;
+export const hover = hoverTooltip(
+  (view, pos): Tooltip | null => {
+    const line = view.state.doc.lineAt(pos);
+    const offset = pos - line.from;
+    if (line.text.slice(0, offset).includes("#")) return null;
 
-  const isWord = (c: string) => /[A-Za-z0-9_@]/.test(c);
-  let from = offset,
-    to = offset;
-  while (from > 0 && isWord(line.text[from - 1])) from--;
-  while (to < line.text.length && isWord(line.text[to])) to++;
-  const word = line.text.slice(from, to);
-  if (!word) return null;
+    const isWord = (c: string) => /[A-Za-z0-9_@]/.test(c);
+    let from = offset,
+      to = offset;
+    while (from > 0 && isWord(line.text[from - 1])) from--;
+    while (to < line.text.length && isWord(line.text[to])) to++;
+    const word = line.text.slice(from, to);
+    if (!word) return null;
 
-  if (word.startsWith("@")) {
-    const name = word.slice(1);
-    const r = view.state.field(refsField).find((x) => x.name === name);
-    const body = r
-      ? r.value
-        ? `Carries ${r.value}`
-        : "This port exists, but nothing is wired into it yet."
-      : "A new reference. Wiring appears as a port on this node once the script assembles.";
-    return { pos: line.from + from, end: line.from + to, above: true, create: () => ({ dom: panel(word, body) }) };
-  }
+    if (word.startsWith("@")) {
+      const name = word.slice(1);
+      const r = view.state.field(refsField).find((x) => x.name === name);
+      const body = r
+        ? r.value
+          ? `Carries ${r.value}`
+          : "This port exists, but nothing is wired into it yet."
+        : "A new reference. Wiring appears as a port on this node once the script assembles.";
+      return { pos: line.from + from, end: line.from + to, above: true, create: () => ({ dom: panel(word, body) }) };
+    }
 
-  const op = byName().get(word);
-  if (!op) return null;
-  const note = statusNote(op.status);
-  return {
-    pos: line.from + from,
-    end: line.from + to,
-    above: true,
-    create: () => ({
-      dom: panel(
-        `${op.name}  0x${op.byte.toString(16).padStart(2, "0")}`,
-        op.description,
-        note,
-        op.status === "covenant" ? "cm-doc-note" : "cm-doc-warn",
-      ),
-    }),
-  };
-});
+    const op = byName().get(word);
+    if (!op) return null;
+    const note = statusNote(op.status);
+    return {
+      pos: line.from + from,
+      end: line.from + to,
+      above: true,
+      create: () => ({
+        dom: panel(
+          `${op.name}  0x${op.byte.toString(16).padStart(2, "0")}`,
+          op.description,
+          note,
+          op.status === "covenant" ? "cm-doc-note" : "cm-doc-warn",
+        ),
+      }),
+    };
+  },
+  { hideOnChange: true },
+);
