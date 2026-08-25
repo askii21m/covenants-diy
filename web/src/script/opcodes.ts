@@ -101,16 +101,19 @@ export const DESCRIPTIONS: Record<string, string> = {
 
   // covenants
   OP_CHECKTEMPLATEVERIFY:
-    "Fail unless the spending transaction matches the 32-byte template hash on the stack. Commits to version, locktime, sequences, outputs and input count, but not to what is being spent. BIP-119.",
+    "Fail unless the spending transaction matches the 32-byte hash on the stack. It does not commit to the coins being spent, so the hash can be built before they exist. BIP-119.",
   OP_CHECKSIGFROMSTACK:
-    "Verify a signature over a message taken from the stack rather than over the transaction. Stack: signature, message, key. The message is not hashed first. BIP-348.",
-  OP_CAT: "Concatenate the top two items, second-from-top first. Limited to 520 bytes. BIP-347.",
+    "Check a signature over a message from the stack rather than over the transaction. Stack: signature, message, key. An empty signature pushes false instead of failing. BIP-348.",
+  OP_CAT:
+    "Concatenate the top two items, the lower one first, capped at 520 bytes. Lets a script build a value and hash it, which is how introspection is done without a dedicated opcode. BIP-347.",
   OP_TEMPLATEHASH:
-    "Push a hash of the spending transaction: version, locktime, all sequences, all outputs, the annex, and this input's index. It does not commit to which coins are being spent, which is what keeps it out of a cycle when the hash sits in the output it constrains, and what makes a signature over it rebindable. BIP-446.",
+    "Push a hash of the spending transaction, omitting the coins being spent. That keeps it out of a cycle when the hash sits in the output it constrains, and makes a signature over it rebindable. BIP-446.",
   OP_INTERNALKEY:
-    "Push the taproot internal key of the output being spent, so a leaf can name the key it was built from without repeating it. BIP-349.",
+    "Push the taproot internal key of the output being spent, so a leaf can name the key it was built from without carrying a copy. BIP-349.",
   OP_PAIRCOMMIT:
-    "Commit to the top two items as one 32-byte hash. Each half is prefixed with its own length, so the pair cannot be forged by moving the boundary between them. BIP-442.",
+    "Commit to the top two items as one 32-byte hash. Each half is length-prefixed, so one pair cannot be passed off as a different split of the same bytes. BIP-442.",
+  OP_TXHASH:
+    "Pop a TxFieldSelector and push a hash of the fields it names. The empty selector matches what CTV covers; others give the BIP-341 and BIP-118 sighash modes, or feed OP_CHECKSIGFROMSTACK. BIP-346.",
 
   // op_success
   OP_SUBSTR: "Disabled before taproot.",
