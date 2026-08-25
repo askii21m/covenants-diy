@@ -28,6 +28,9 @@ pub struct Ruleset {
     /// BIP-442 OP_PAIRCOMMIT (0xcd).
     #[serde(default)]
     pub paircommit: bool,
+    /// BIP-346 OP_TXHASH (0xbd).
+    #[serde(default)]
+    pub txhash: bool,
 }
 
 impl Default for Ruleset {
@@ -40,6 +43,7 @@ impl Default for Ruleset {
             templatehash: false,
             internalkey: false,
             paircommit: false,
+            txhash: false,
         }
     }
 }
@@ -53,6 +57,7 @@ impl Ruleset {
         templatehash: false,
         internalkey: false,
         paircommit: false,
+        txhash: false,
     };
     pub const ALL: Ruleset = Ruleset {
         ctv: true,
@@ -62,6 +67,7 @@ impl Ruleset {
         templatehash: true,
         internalkey: true,
         paircommit: true,
+        txhash: true,
     };
 }
 
@@ -140,6 +146,12 @@ pub fn classify(script: &Script, rules: &Ruleset) -> EnforcementReport {
             0xcb => {
                 if !rules.internalkey {
                     note("OP_INTERNALKEY", Enforcement::Open);
+                }
+            }
+            // OP_SUCCESS189: BIP-346 OP_TXHASH.
+            0xbd => {
+                if !rules.txhash {
+                    note("OP_TXHASH", Enforcement::Open);
                 }
             }
             // OP_SUCCESS205: BIP-442 OP_PAIRCOMMIT.

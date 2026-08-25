@@ -9,6 +9,7 @@ export const NODE_TESTS = [
   "test/bounds.test.ts",
   "test/share.test.ts",
   "test/functions.test.ts",
+  "test/txhash.test.ts",
 ];
 
 export default defineConfig({

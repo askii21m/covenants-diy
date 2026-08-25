@@ -19,6 +19,7 @@ export type Ruleset = {
   templatehash: boolean;
   internalkey: boolean;
   paircommit: boolean;
+  txhash: boolean;
 };
 
 export const FLAGS: Array<{ id: keyof Ruleset; label: string; bip: string }> = [
@@ -29,6 +30,7 @@ export const FLAGS: Array<{ id: keyof Ruleset; label: string; bip: string }> = [
   { id: "templatehash", label: "OP_TEMPLATEHASH", bip: "BIP 446" },
   { id: "internalkey", label: "OP_INTERNALKEY", bip: "BIP 349" },
   { id: "paircommit", label: "OP_PAIRCOMMIT", bip: "BIP 442" },
+  { id: "txhash", label: "OP_TXHASH", bip: "BIP 346" },
 ];
 export const PRESETS: Array<{ label: string; hint?: string; on: Array<keyof Ruleset> }> = [
   { label: "none", on: [] },

@@ -59,6 +59,9 @@ const VALIDATION_WEIGHT_OFFSET: i64 = 50;
 /// Validation weight per passing signature (Tapscript only, see BIP 342).
 const VALIDATION_WEIGHT_PER_SIGOP_PASSED: i64 = 50;
 
+// BIP-346 charges a TxHash half of what a passed sigop costs.
+const VALIDATION_WEIGHT_PER_TXHASH: i64 = 25;
+
 // Maximum number of public keys per multisig
 const _MAX_PUBKEYS_PER_MULTISIG: i64 = 20;
 
@@ -79,6 +82,8 @@ pub struct Deployments {
     pub internalkey: bool,
     /// BIP-442 OP_PAIRCOMMIT (0xcd, tapscript only).
     pub paircommit: bool,
+    /// BIP-346 OP_TXHASH (0xbd, tapscript only).
+    pub txhash: bool,
 }
 
 impl Default for Deployments {
@@ -91,6 +96,7 @@ impl Default for Deployments {
             templatehash: true,
             internalkey: true,
             paircommit: true,
+            txhash: true,
         }
     }
 }
@@ -145,6 +151,10 @@ pub struct TxTemplate {
     /// when absent, the budget falls back to the initial stack size alone,
     /// which understates the real budget.
     pub full_witness_size: Option<usize>,
+    /// Serialized control block of the input being spent. BIP-346 commits to
+    /// it, and this tool's transactions carry empty witnesses, so it cannot
+    /// be recovered from the input the way a signed transaction allows.
+    pub control_block: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1147,6 +1157,43 @@ impl Exec {
                 self.stack.pushstr(&pc);
             }
 
+            // BIP-346. Hashes the fields the selector names. The empty
+            // selector covers what CTV covers, so this generalises it, and
+            // paired with CSFS the script defines its own signature hash.
+            OP_RETURN_189 if self.ctx == ExecCtx::Tapscript && self.opt.deployments.txhash => {
+                // (txfs -- txhash)
+                self.stack.needn(1)?;
+                // Each hash costs the same budget a passed sigop does, halved,
+                // because the fields it covers are all cacheable.
+                self.validation_weight -= VALIDATION_WEIGHT_PER_TXHASH;
+                if self.validation_weight < 0 {
+                    return Err(ExecError::TapscriptValidationWeight);
+                }
+                let txfs = self.stack.popstr().unwrap();
+                let annex = self
+                    .tx
+                    .taproot_annex_scriptleaf
+                    .as_ref()
+                    .and_then(|(_, annex)| annex.as_deref());
+                let current = covenants_core::txhash::CurrentInput {
+                    control_block: self.tx.control_block.as_deref(),
+                    // The leaf being executed is the spent script; a leaf is
+                    // always version 0xc0 here, since no other is defined.
+                    leaf: Some((0xc0, self.script)),
+                    annex,
+                    last_codeseparator_pos: self.last_codeseparator_pos,
+                };
+                let hash = covenants_core::txhash::tx_hash(
+                    &txfs,
+                    &self.tx.tx,
+                    &self.tx.prevouts,
+                    self.tx.input_idx,
+                    &current,
+                )
+                .map_err(ExecError::TxFieldSelector)?;
+                self.stack.pushstr(&hash);
+            }
+
             // BIP-349. Pushes the taproot internal key, so a leaf can name
             // the key its own output was built from without repeating it.
             OP_RETURN_203 if self.ctx == ExecCtx::Tapscript && self.opt.deployments.internalkey => {
@@ -1307,6 +1354,7 @@ fn scan_tapscript_op_success(script: &Script, deployments: &Deployments) -> Taps
             || (deployments.internalkey && op == 0xcb)
             || (deployments.templatehash && op == 0xce)
             || (deployments.paircommit && op == 0xcd)
+            || (deployments.txhash && op == 0xbd)
     };
     for instruction in script.instructions() {
         match instruction {

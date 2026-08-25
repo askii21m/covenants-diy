@@ -15,6 +15,7 @@ Signet and regtest only. A place to design and to learn, not to move money.
 - OP_TEMPLATEHASH (BIP 446)
 - OP_INTERNALKEY (BIP 349)
 - OP_PAIRCOMMIT (BIP 442)
+- OP_TXHASH (BIP 346)
 
 Choose which are active in the header and every
 script is marked enforced, degraded, or open against that choice.

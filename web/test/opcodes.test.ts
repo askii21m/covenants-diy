@@ -43,5 +43,6 @@ describe("the opcode catalog", () => {
     expect(byName.get("OP_CHECKSIGADD")?.status).toBe("ok");
     expect(byName.get("OP_CHECKTEMPLATEVERIFY")?.deployment).toBe("ctv");
     expect(byName.get("OP_PAIRCOMMIT")?.deployment).toBe("paircommit");
+    expect(byName.get("OP_TXHASH")?.deployment).toBe("txhash");
   });
 });

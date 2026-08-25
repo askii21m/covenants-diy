@@ -223,6 +223,10 @@ pub fn parse_opcode(s: &str) -> Result<Opcode, ()> {
                 "TEMPLATEHASH" | "TH" => Ok(OP_RETURN_206),
                 "INTERNALKEY" => Ok(OP_RETURN_203),
                 "PAIRCOMMIT" | "PC" => Ok(OP_RETURN_205),
+                // BIP-346. OP_SUCCESS189, the next byte free when it was
+                // drafted: 187 went to OP_CHECKCONTRACTVERIFY and 188 to
+                // OP_VAULT.
+                "TXHASH" => Ok(OP_RETURN_189),
 
                 "NOP4" => Ok(OP_NOP4),
                 "NOP5" => Ok(OP_NOP5),

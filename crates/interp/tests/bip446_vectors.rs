@@ -66,6 +66,7 @@ fn run_case(case: &Value) -> Result<bool, String> {
             taproot_annex_scriptleaf: Some((leaf, annex)),
             internal_key: Some(cb.internal_key),
             full_witness_size: None,
+            control_block: None,
         },
         script,
         stack,
@@ -131,6 +132,7 @@ fn run_asset(case: &Value, which: &str) -> Option<Result<bool, String>> {
         templatehash: flags.split(',').any(|f| f == "TEMPLATEHASH"),
         internalkey: false,
         paircommit: false,
+        txhash: false,
     };
     let tx_hex = case["tx"].as_str()?;
     let mut tx: Transaction = deserialize(&Vec::<u8>::from_hex(tx_hex).ok()?).ok()?;
@@ -184,6 +186,7 @@ fn run_asset(case: &Value, which: &str) -> Option<Result<bool, String>> {
             taproot_annex_scriptleaf: Some((leaf, annex)),
             internal_key: Some(cb.internal_key),
             full_witness_size: None,
+            control_block: None,
         },
         script,
         stack,

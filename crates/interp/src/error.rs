@@ -39,6 +39,8 @@ pub enum ExecError {
     TemplateHashInputIndex,
     /// BIP-349: OP_INTERNALKEY with no taproot internal key provided.
     InternalKeyMissing,
+    /// BIP-346: the TxFieldSelector does not name a valid set of fields.
+    TxFieldSelector(covenants_core::txhash::TxHashError),
 
     // new ones for us
     ScriptIntNumericOverflow,

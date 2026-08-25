@@ -27,6 +27,7 @@ fn deployments(r: &Ruleset) -> Deployments {
         templatehash: r.templatehash,
         internalkey: r.internalkey,
         paircommit: r.paircommit,
+        txhash: r.txhash,
     }
 }
 
@@ -164,6 +165,7 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
     // The control block carries the internal key, which a BIP-118 check
     // against the 0x01 key needs; an explicit internal_key still wins.
     let mut internal_key = internal_key;
+    let mut control_block_bytes = None;
     let full_witness_size = match &req.control_block {
         Some(cb) => {
             let cb = ControlBlock::decode(&hex_bytes(cb, "control_block")?)
@@ -171,12 +173,14 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
             if internal_key.is_none() {
                 internal_key = Some(cb.internal_key);
             }
+            let serialized = cb.serialize();
             let mut w = Witness::new();
             for item in &stack {
                 w.push(item);
             }
             w.push(script.as_bytes());
-            w.push(cb.serialize());
+            w.push(&serialized);
+            control_block_bytes = Some(serialized);
             Some(w.size())
         }
         None => None,
@@ -199,6 +203,7 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
             taproot_annex_scriptleaf: Some((leaf, None)),
             internal_key,
             full_witness_size,
+            control_block: control_block_bytes,
         },
         script,
         stack,

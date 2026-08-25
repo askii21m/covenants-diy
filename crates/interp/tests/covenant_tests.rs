@@ -1,5 +1,6 @@
 use bitcoin::hashes::Hash;
 use bitcoin::hex::FromHex;
+use bitcoin::opcodes::all::OP_RETURN_189 as OP_TXHASH;
 use bitcoin::opcodes::all::{
     OP_CAT, OP_CHECKSIG, OP_CODESEPARATOR, OP_DROP, OP_NOP4, OP_PUSHNUM_1, OP_RETURN_204,
 };
@@ -78,6 +79,7 @@ fn run_tapscript_with(
             taproot_annex_scriptleaf: Some((leaf, None)),
             internal_key,
             full_witness_size: None,
+            control_block: None,
         },
         script,
         witness,
@@ -615,6 +617,7 @@ fn paircommit_disabled_is_op_success() {
     let (tx, prevouts) = fixture(1, 1);
     let deployments = Deployments {
         paircommit: false,
+        txhash: false,
         ..Deployments::default()
     };
     let script = Builder::new()
@@ -623,4 +626,151 @@ fn paircommit_disabled_is_op_success() {
         .into_script();
     let res = run_tapscript_with(script, vec![], tx, prevouts, deployments, None).unwrap();
     assert!(res.success, "an inactive OP_SUCCESSx passes the script");
+}
+
+/// The empty selector is the default template, which is what makes
+/// OP_TXHASH a generalisation of CTV rather than a parallel mechanism.
+#[test]
+fn txhash_pushes_the_hash_for_the_empty_selector() {
+    let (tx, prevouts) = fixture(1, 1);
+    let script = ScriptBuf::from(vec![0x51]);
+    let want = covenants_core::txhash::tx_hash(
+        &[],
+        &tx,
+        &prevouts,
+        0,
+        &covenants_core::txhash::CurrentInput {
+            leaf: Some((0xc0, &script)),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    let script = Builder::new()
+        .push_slice([])
+        .push_opcode(OP_TXHASH)
+        .push_slice(want)
+        .push_opcode(bitcoin::opcodes::all::OP_EQUAL)
+        .into_script();
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert!(res.success, "{:?}", res.error);
+}
+
+/// Two selectors naming different fields have to give different hashes,
+/// or the selector would not be doing anything.
+#[test]
+fn txhash_separates_selectors() {
+    let (tx, prevouts) = fixture(1, 1);
+    let script = Builder::new()
+        .push_slice([0x01u8, 0x00])
+        .push_opcode(OP_TXHASH)
+        .push_slice([0x02u8, 0x00])
+        .push_opcode(OP_TXHASH)
+        .push_opcode(bitcoin::opcodes::all::OP_EQUAL)
+        .push_opcode(bitcoin::opcodes::all::OP_NOT)
+        .into_script();
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert!(res.success, "{:?}", res.error);
+}
+
+/// The spent script is the leaf being executed, so a script that commits
+/// to it commits to itself. Two different leaves must not agree.
+#[test]
+fn txhash_commits_to_the_executing_leaf() {
+    let (tx, prevouts) = fixture(1, 1);
+    let selector = [
+        covenants_core::txhash::TXFS_CURRENT_INPUT_SPENTSCRIPT,
+        0x00u8,
+    ];
+    let mut hashes = Vec::new();
+    for filler in [OP_DROP, OP_CODESEPARATOR] {
+        let script = Builder::new()
+            .push_slice(selector)
+            .push_opcode(OP_TXHASH)
+            .push_opcode(OP_PUSHNUM_1)
+            .push_opcode(filler)
+            .into_script();
+        let res = run_tapscript(script, vec![], tx.clone(), prevouts.clone()).unwrap();
+        // iter_str runs bottom to top, and the hash is what is left on top.
+        hashes.push(res.final_stack.iter_str().next_back().unwrap().to_vec());
+    }
+    assert_ne!(
+        hashes[0], hashes[1],
+        "two different leaves produced the same spent-script commitment"
+    );
+}
+
+/// BIP-346 charges 25 weight per hash. The budget comes from the witness
+/// size, so a script with no witness to pay for them runs out.
+#[test]
+fn txhash_is_charged_against_the_validation_budget() {
+    let (tx, prevouts) = fixture(1, 1);
+    let mut b = Builder::new();
+    for _ in 0..4 {
+        b = b
+            .push_slice([0x01u8, 0x00])
+            .push_opcode(OP_TXHASH)
+            .push_opcode(OP_DROP);
+    }
+    let script = b.push_opcode(OP_PUSHNUM_1).into_script();
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert_eq!(
+        res.error,
+        Some(ExecError::TapscriptValidationWeight),
+        "four hashes on a 50-weight budget must exhaust it"
+    );
+}
+
+/// An invalid selector fails the script rather than pushing something.
+#[test]
+fn txhash_rejects_an_invalid_selector() {
+    let (tx, prevouts) = fixture(1, 1);
+    // Leading 9 inputs, of one.
+    let script = Builder::new()
+        .push_slice([0x01u8, 0x02, 0x09, 0x00])
+        .push_opcode(OP_TXHASH)
+        .into_script();
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert_eq!(
+        res.error,
+        Some(ExecError::TxFieldSelector(
+            covenants_core::txhash::TxHashError::SelectionOutOfBounds
+        ))
+    );
+}
+
+/// Inactive, 0xbd is OP_SUCCESS189: the script passes without running.
+#[test]
+fn txhash_inactive_is_op_success() {
+    let (tx, prevouts) = fixture(1, 1);
+    let deployments = Deployments {
+        txhash: false,
+        ..Default::default()
+    };
+    let script = Builder::new()
+        .push_opcode(OP_TXHASH)
+        .push_opcode(bitcoin::opcodes::all::OP_RETURN)
+        .into_script();
+    let res = run_tapscript_with(script, vec![], tx, prevouts, deployments, None).unwrap();
+    assert!(res.success, "an inactive OP_TXHASH passes the script");
+}
+
+/// The guard against the bug this opcode shipped with: BIP-342 scans for
+/// OP_SUCCESSx before executing anything, and an active deployment has to
+/// be carved out of that scan. Without the carve-out this script passes
+/// without running, so a script that should fail reports success.
+#[test]
+fn an_active_txhash_does_not_pass_the_script_by_itself() {
+    let (tx, prevouts) = fixture(1, 1);
+    let script = Builder::new()
+        .push_slice([0x01u8, 0x00])
+        .push_opcode(OP_TXHASH)
+        .push_opcode(OP_DROP)
+        .push_opcode(bitcoin::opcodes::OP_0)
+        .into_script();
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert!(
+        !res.success,
+        "an active OP_TXHASH passed a script ending in OP_0, so the pre-scan \
+         treated it as OP_SUCCESSx instead of executing it"
+    );
 }
