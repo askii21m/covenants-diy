@@ -1036,7 +1036,11 @@ textarea {
 }
 /* Tooltips live on the body so the panel cannot clip them; they sit above
    everything the app draws, including the node canvas. */
-.cm-tooltip {
+/* CodeMirror's base theme sets a grey background and its own border on
+   every tooltip, from behind its generated theme class, which outranks a
+   single class here. Without the repeat the hover panel keeps that grey
+   while the completion panel, which has a heavier rule below, goes white. */
+.cm-tooltip.cm-tooltip.cm-tooltip {
   border: 1px solid var(--line);
   background: var(--surface);
   border-radius: var(--r);
