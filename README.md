@@ -1,8 +1,6 @@
 # covenants.diy
 
-A node editor for Bitcoin covenants. Wire the pieces together and it builds
-the taproot output, assembles the tapscript, computes the sighash, and runs
-the script, showing what each opcode did to the stack.
+An interactive research and development environment for designing, analyzing, and evaluating Bitcoin covenant constructions and covenant-based protocols. It provides a visual interface for constructing Bitcoin Script programs, inspecting their execution, and experimenting with emerging covenant proposals and techniques.
 
 **<https://covenants.diy>**
 
@@ -10,14 +8,20 @@ Signet and regtest only. A place to design and to learn, not to move money.
 
 ## What it knows
 
-CTV (BIP 119), CSFS (BIP 348), OP_CAT (BIP 347), APO (BIP 118),
-OP_TEMPLATEHASH (BIP 446), OP_INTERNALKEY (BIP 349), and the BIP 448
-bundle of the last three. Choose which are active in the header and every
+OP_CHECKTEMPLATEVERIFY (BIP 119)
+OP_CHECKSIGFROMSTACK (BIP 348)
+OP_CAT (BIP 347)
+ANYPREVOUT (BIP 118)
+OP_TEMPLATEHASH (BIP 446)
+OP_INTERNALKEY (BIP 349)
+OP_PAIRCOMMIT (BIP 442)
+
+Choose which are active in the header and every
 script is marked enforced, degraded, or inert against that choice.
 
-Eight worked examples ship with it: a vault, congestion control,
+Nine worked examples ship with it: a vault, congestion control,
 delegation, an oracle payout, rebindable state both ways, a merkle proof,
-and a recursive covenant.
+a covenant using only OP_CAT, and a recursive covenant.
 
 ## Build
 
