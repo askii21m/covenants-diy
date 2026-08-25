@@ -1795,6 +1795,10 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+  /* Takes the free space so the label starts against the tick. Without it,
+     space-between pins the tick and the tag to the edges and leaves the
+     label floating in the middle. */
+  flex: 1;
 }
 /* An item that carries a second line: name and tag on the first row, then
    what it shows across the full width of the second. */
