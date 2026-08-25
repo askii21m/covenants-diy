@@ -31,7 +31,11 @@ function tooltipHost(): HTMLElement {
   if (!el) {
     el = document.createElement("div");
     el.id = "cm-tips";
-    el.style.cssText = "position:fixed;top:0;left:0;width:0;height:0;overflow:visible";
+    // Full width, no height: fixed elements are out of flow so this adds no
+    // scroll extent, but a zero-width host would be the containing block for
+    // any tooltip that is not itself fixed, collapsing it onto its longest
+    // word.
+    el.style.cssText = "position:fixed;top:0;left:0;width:100vw;height:0;overflow:visible";
     document.body.appendChild(el);
   }
   return el;
@@ -49,17 +53,21 @@ function errorRange(doc: string, err: ScriptError): { from: number; to: number }
   const lines = doc.split("\n");
   const line = lines[err.line] ?? "";
   let at = 0;
-  for (let i = 0; i < err.line; i++) at += lines[i].length + 1;
+  for (let i = 0; i < err.line && i < lines.length; i++) at += lines[i].length + 1;
+  // An error arrives one render behind the text it describes, so deleting
+  // the last line leaves a position past the end of the shorter document,
+  // which CodeMirror rejects outright.
+  const clamp = (n: number) => Math.max(0, Math.min(n, doc.length));
   // Words are whitespace-separated; comments do not count.
   const code = line.split("#")[0];
   const re = /\S+/g;
   let m: RegExpExecArray | null,
     n = 0;
   while ((m = re.exec(code))) {
-    if (n === err.word) return { from: at + m.index, to: at + m.index + m[0].length };
+    if (n === err.word) return { from: clamp(at + m.index), to: clamp(at + m.index + m[0].length) };
     n++;
   }
-  return { from: at, to: at + line.length };
+  return { from: clamp(at), to: clamp(at + line.length) };
 }
 
 export function Editor({ id, source, error, refs }: { id: string; source: string; error?: ScriptError; refs: Refs[] }) {
@@ -103,10 +111,10 @@ export function Editor({ id, source, error, refs }: { id: string; source: string
       extensions: [
         // Completion and hover panels are put outside the editor, positioned
         // fixed: inside it they are clipped by the panel that holds it, which
-        // cut the documentation in half. The host is itself fixed and zero
-        // sized, because in normal flow the container CodeMirror mounts
-        // gains a viewport of height and the whole page becomes scrollable
-        // by exactly one screen.
+        // cut the documentation in half. The host is fixed and of no height,
+        // because in normal flow the container CodeMirror mounts gains a
+        // viewport of height and the whole page becomes scrollable by
+        // exactly one screen.
         tooltips({ parent: tooltipHost(), position: "fixed" }),
         lineNumbers(),
         highlightActiveLineGutter(),
