@@ -10,7 +10,7 @@ import { Detail } from "./panels/Detail";
 import { InlineName } from "./nodes/InlineName";
 import { EXAMPLES, EXAMPLE_GROUPS } from "./examples";
 import { shortLink, decodeFlow, fetchShared, fragmentOnUrl, idOnUrl, type SharedDoc } from "./share";
-import { NETWORKS, RULESETS } from "./engine";
+import { NETWORKS, FLAGS, PRESETS, flagsOf, nameOf, summaryOf } from "./engine";
 
 /** A flow file: the document's flow, its name, and the view it was left
  *  at. Older files have no name and take the file's. */
@@ -56,7 +56,7 @@ function useOpeners() {
   return { openBlank, openExample, openFile };
 }
 
-type MenuName = "file" | "edit" | "view" | "new";
+type MenuName = "file" | "edit" | "view" | "new" | "rules";
 type OpenMenu = (which: MenuName, trigger: HTMLElement) => void;
 
 /** Writes the active document out as a file. */
@@ -79,11 +79,11 @@ function TopBar({ openMenu, open }: { openMenu: OpenMenu; open: MenuName | null 
   const network = useStore((s) => s.network);
   const ruleset = useStore((s) => s.ruleset);
   const setNetwork = useStore((s) => s.setNetwork);
-  const setRuleset = useStore((s) => s.setRuleset);
   const refs = {
     file: useRef<HTMLButtonElement>(null),
     edit: useRef<HTMLButtonElement>(null),
     view: useRef<HTMLButtonElement>(null),
+    rules: useRef<HTMLButtonElement>(null),
   };
   return (
     <header className="top">
@@ -139,13 +139,18 @@ function TopBar({ openMenu, open }: { openMenu: OpenMenu; open: MenuName | null 
       </label>
       <label className="sel">
         <span>assume active</span>
-        <select value={ruleset} onChange={(e) => setRuleset(e.target.value)}>
-          {Object.entries(RULESETS).map(([k, v]) => (
-            <option key={k} value={k} title={v.hint}>
-              {v.label}
-            </option>
-          ))}
-        </select>
+        <button
+          ref={refs.rules}
+          className="sel-btn"
+          aria-haspopup="menu"
+          aria-expanded={open === "rules"}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            openMenu("rules", refs.rules.current!);
+          }}
+        >
+          {summaryOf(flagsOf(ruleset))}
+        </button>
       </label>
       <a
         className="gh"
@@ -370,6 +375,9 @@ export default function App() {
   const showMinimap = useStore((s) => s.showMinimap);
   const toggleMinimap = useStore((s) => s.toggleMinimap);
   const { openBlank, openExample, openFile } = useOpeners();
+  const ruleset = useStore((s) => s.ruleset);
+  const setRuleset = useStore((s) => s.setRuleset);
+  const flags = flagsOf(ruleset);
   const [menu, setMenu] = useState<{ which: MenuName; x: number; y: number; trigger: HTMLElement } | null>(null);
   // Counted, not boolean, so the same message twice re-announces and
   // resets the timer.
@@ -448,6 +456,29 @@ export default function App() {
     },
   ];
 
+  // Six switches, and the bundles people have actually proposed. The
+  // switches stay open as they are set; a bundle sets them all and closes.
+  const rulesItems: MenuItem[] = [
+    { label: "Opcodes", heading: true },
+    ...FLAGS.map((f) => ({
+      label: f.label,
+      shortcut: f.bip,
+      checked: flags[f.id],
+      keepOpen: true,
+      onClick: () => setRuleset(nameOf({ ...flags, [f.id]: !flags[f.id] })),
+    })),
+    ...(["Proposed", "Running"] as const).flatMap((g) => [
+      { separator: true, label: "" },
+      { label: g, heading: true },
+      ...PRESETS.filter((p) => p.group === g).map((p) => ({
+        label: p.label,
+        detail: p.hint,
+        keepOpen: true,
+        onClick: () => setRuleset(nameOf(flagsOf(p.on.join("+") || "none"))),
+      })),
+    ]),
+  ];
+
   const viewItems: MenuItem[] = [
     { label: "Zoom in", onClick: () => viewActions.zoomIn() },
     { label: "Zoom out", onClick: () => viewActions.zoomOut() },
@@ -503,8 +534,11 @@ export default function App() {
                   ? editItems
                   : menu.which === "view"
                     ? viewItems
-                    : newItems
+                    : menu.which === "rules"
+                      ? rulesItems
+                      : newItems
             }
+            className={menu.which === "rules" ? "menu-rules" : undefined}
             ignore={menu.trigger}
             onClose={() => setMenu(null)}
           />

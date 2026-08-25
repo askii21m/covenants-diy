@@ -683,7 +683,7 @@ export function oracle(): Example {
     around("c_funded", "Paid in", "slate", nodes, ["funding"]),
     around("c_settle", "Settling: the attestation is the whole witness", "blue", nodes, ["witness", "settle", "check"]),
   );
-  return { nodes, edges, network: "signet", ruleset: "letter", select: "leaf" };
+  return { nodes, edges, network: "signet", ruleset: "ctv+csfs", select: "leaf" };
 }
 
 // --- eltoo --------------------------------------------------------------------
@@ -1226,7 +1226,7 @@ export function recursive(): Example {
     ]),
     around("c_back", "Put back together", "green", nodes, ["witness", "spend_tx", "check"]),
   );
-  return { nodes, edges, network: "signet", ruleset: "catall", select: "covenant" };
+  return { nodes, edges, network: "signet", ruleset: "csfs+cat", select: "covenant" };
 }
 
 // --- a covenant with CAT alone -----------------------------------------------

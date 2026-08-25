@@ -1733,7 +1733,9 @@ textarea {
   z-index: 50;
   outline: none;
   min-width: 220px;
-  max-width: 340px;
+  /* Wide enough that OP_CHECKTEMPLATEVERIFY and its BIP number sit on one
+     line without an ellipsis, which is the longest row any menu carries. */
+  max-width: 400px;
   max-height: calc(100vh - 16px);
   overflow-y: auto;
   background: var(--surface);
@@ -1979,6 +1981,22 @@ textarea {
   max-width: 190px;
   text-overflow: ellipsis;
 }
+.sel-btn {
+  font-size: 13.5px;
+  font-weight: 500;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.sel-btn:focus-visible {
+  outline: 2px solid var(--a);
+  outline-offset: 2px;
+}
 
 /* source link, last in the header rhythm the selects set */
 .gh {
@@ -1999,4 +2017,9 @@ textarea {
   outline: 2px solid var(--a);
   outline-offset: -3px;
   border-radius: var(--r-s);
+}
+
+/* Opcode names and their BIP number on one line, without an ellipsis. */
+.menu.menu-rules {
+  min-width: 340px;
 }

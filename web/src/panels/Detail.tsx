@@ -6,7 +6,7 @@ import { Fragment, useRef } from "react";
 import { KINDS, type Value } from "../registry";
 import { useStore, portValue } from "../store";
 import { Editor } from "../script/Editor";
-import { wasm, RULESETS } from "../engine";
+import { wasm, flagsOf } from "../engine";
 import type { DebugTrace, ParsedTx, AssembleView } from "../../pkg/covenants.js";
 import { COMMENT_COLORS } from "../nodes/CommentNode";
 
@@ -108,7 +108,7 @@ function ScriptEditor({ id, source, view }: { id: string; source: string; view?:
   const underNone = view?.script
     ? (() => {
         try {
-          return wasm.classify(view.script, RULESETS.none.flags);
+          return wasm.classify(view.script, flagsOf("none"));
         } catch {
           return null;
         }

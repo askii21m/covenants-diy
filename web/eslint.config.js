@@ -26,6 +26,9 @@ export default ts.config(
       // here; exhaustive-deps stays on, and its two omissions are annotated.
       "react-hooks/set-state-in-effect": "off",
       "react-hooks/refs": "off",
+      // A React Compiler readiness check. This project does not compile with
+      // it, and the callbacks it flags close over nothing but stable setState.
+      "react-hooks/preserve-manual-memoization": "off",
     },
   },
 );

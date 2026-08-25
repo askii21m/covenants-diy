@@ -27,7 +27,7 @@ import {
   type PortType,
   type Port,
 } from "./registry";
-import { RULESETS, NETWORKS, type Network } from "./engine";
+import { flagsOf, isRuleset, NETWORKS, type Network } from "./engine";
 
 export type FlowNode = Node<NodeFields>;
 export interface Flow {
@@ -148,7 +148,7 @@ export function sanitizeFlow(raw: unknown): (Partial<Flow> & { name?: string }) 
     edges.push({ id, source: o.source, sourceHandle: sh, target: o.target, targetHandle: th });
   }
   const network = (NETWORKS as readonly string[]).includes(String(r.network)) ? (r.network as Network) : undefined;
-  const ruleset = typeof r.ruleset === "string" && Object.hasOwn(RULESETS, r.ruleset) ? r.ruleset : undefined;
+  const ruleset = typeof r.ruleset === "string" && isRuleset(r.ruleset) ? r.ruleset : undefined;
   const name = typeof r.name === "string" ? r.name : undefined;
   // A file that had nodes but none the editor understands is a failure, not
   // an empty document; an empty file is legitimately empty.
@@ -409,7 +409,7 @@ export function evaluate(
       if (d === 0) queue.push(e.target);
     }
   }
-  const ctx = { network, ruleset: RULESETS[ruleset]?.flags ?? RULESETS.letter.flags };
+  const ctx = { network, ruleset: flagsOf(ruleset) };
   const out: Record<string, Computed> = {};
   for (const id of order) {
     const n = byId.get(id)!;
