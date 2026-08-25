@@ -3,16 +3,141 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>covenants.diy</title>
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <meta name="theme-color" content="#0F766E" />
+    <title>covenants.diy · Bitcoin covenant development environment</title>
     <meta
       name="description"
-      content="A node editor for Bitcoin covenants. Build the taproot output, assemble the tapscript, and run the script."
+      content="An interactive research and development environment for designing, analyzing, and evaluating Bitcoin covenant constructions and covenant-based protocols."
     />
+    <link rel="canonical" href="https://covenants.diy/" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#0F766E" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="covenants.diy" />
+    <meta property="og:title" content="covenants.diy · Bitcoin covenant development environment" />
+    <meta
+      property="og:description"
+      content="An interactive research and development environment for designing, analyzing, and evaluating Bitcoin covenant constructions and covenant-based protocols."
+    />
+    <meta property="og:url" content="https://covenants.diy/" />
+    <meta property="og:image" content="https://covenants.diy/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="covenants.diy: a node editor for Bitcoin covenant scripts" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="covenants.diy · Bitcoin covenant development environment" />
+    <meta
+      name="twitter:description"
+      content="An interactive research and development environment for designing, analyzing, and evaluating Bitcoin covenant constructions and covenant-based protocols."
+    />
+    <meta name="twitter:image" content="https://covenants.diy/og.png" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebApplication",
+        "name": "covenants.diy",
+        "url": "https://covenants.diy/",
+        "description": "An interactive research and development environment for designing, analyzing, and evaluating Bitcoin covenant constructions and covenant-based protocols.",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Any",
+        "browserRequirements": "Requires JavaScript and WebAssembly",
+        "isAccessibleForFree": true,
+        "license": "https://spdx.org/licenses/MIT.html",
+        "image": "https://covenants.diy/og.png",
+        "sameAs": ["https://github.com/askii21m/covenants-diy"],
+        "author": { "@type": "Person", "name": "askii21m", "url": "https://github.com/askii21m" },
+        "featureList": [
+          "OP_CHECKTEMPLATEVERIFY (BIP 119)",
+          "OP_CHECKSIGFROMSTACK (BIP 348)",
+          "OP_CAT (BIP 347)",
+          "ANYPREVOUT (BIP 118)",
+          "OP_TEMPLATEHASH (BIP 446)",
+          "OP_INTERNALKEY (BIP 349)",
+          "OP_PAIRCOMMIT (BIP 442)"
+        ]
+      }
+    </script>
+    <style>
+      /* What a visitor sees while the wasm engine loads, and what a crawler
+         without JavaScript indexes. React replaces it on mount. */
+      body {
+        margin: 0;
+      }
+      .boot {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 0 24px;
+        background: #f4f5f7;
+        color: #0e1116;
+        font-family: "Instrument Sans", system-ui, sans-serif;
+        text-align: center;
+      }
+      .boot svg {
+        display: block;
+      }
+      .boot h1 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+      .boot p {
+        margin: 0;
+        max-width: 600px;
+        font-size: 14.5px;
+        line-height: 1.55;
+        color: #5a6472;
+      }
+      .boot .ops {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-size: 12px;
+        color: #0f766e;
+      }
+      .boot .quiet {
+        font-size: 12.5px;
+        color: #8c96a5;
+      }
+      .boot a {
+        color: #0f766e;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot">
+        <svg viewBox="0 0 32 32" width="44" height="44" aria-hidden="true">
+          <rect width="32" height="32" rx="7.5" fill="#0F766E" />
+          <g fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round">
+            <path d="M10.6 16C15 16 15.4 9.6 20.4 9.6" />
+            <path d="M10.6 16C15 16 15.4 22.4 20.4 22.4" />
+          </g>
+          <g fill="#fff">
+            <circle cx="8.6" cy="16" r="3" />
+            <circle cx="22.6" cy="9.6" r="3" />
+            <circle cx="22.6" cy="22.4" r="3" />
+          </g>
+        </svg>
+        <h1>covenants.diy</h1>
+        <p>
+          An interactive research and development environment for designing, analyzing, and evaluating Bitcoin covenant
+          constructions and covenant-based protocols. Wire nodes into a graph and it builds the taproot output,
+          assembles the tapscript, computes the sighash, and steps through script execution, entirely in the browser.
+          Signet and regtest only.
+        </p>
+        <p class="ops">CTV · CSFS · CAT · APO · TEMPLATEHASH · INTERNALKEY · PAIRCOMMIT</p>
+        <p class="quiet">Loading the editor…</p>
+        <noscript>
+          <p>
+            The editor needs JavaScript and WebAssembly. The source is MIT licensed at
+            <a href="https://github.com/askii21m/covenants-diy">github.com/askii21m/covenants-diy</a>.
+          </p>
+        </noscript>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
