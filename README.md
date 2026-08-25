@@ -17,7 +17,7 @@ Signet and regtest only. A place to design and to learn, not to move money.
 - OP_PAIRCOMMIT (BIP 442)
 
 Choose which are active in the header and every
-script is marked enforced, degraded, or inert against that choice.
+script is marked enforced, degraded, or open against that choice.
 
 Nine worked examples ship with it: a vault, congestion control,
 delegation, an oracle payout, rebindable state both ways, a merkle proof,
