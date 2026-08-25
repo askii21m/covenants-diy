@@ -26,6 +26,17 @@ import { completions, type Refs } from "./complete";
 import { refsField, refMarks, hover, setRefs } from "./marks";
 import { useStore, registerPendingEdit } from "../store";
 
+function tooltipHost(): HTMLElement {
+  let el = document.getElementById("cm-tips");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "cm-tips";
+    el.style.cssText = "position:fixed;top:0;left:0;width:0;height:0;overflow:visible";
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
 export interface ScriptError {
   line: number;
   word: number;
@@ -90,10 +101,13 @@ export function Editor({ id, source, error, refs }: { id: string; source: string
     const state = EditorState.create({
       doc: source,
       extensions: [
-        // Completion and hover panels are put on the body, positioned
-        // fixed: inside the editor they are clipped by the panel that
-        // holds it, which cut the documentation in half.
-        tooltips({ parent: document.body, position: "fixed" }),
+        // Completion and hover panels are put outside the editor, positioned
+        // fixed: inside it they are clipped by the panel that holds it, which
+        // cut the documentation in half. The host is itself fixed and zero
+        // sized, because in normal flow the container CodeMirror mounts
+        // gains a viewport of height and the whole page becomes scrollable
+        // by exactly one screen.
+        tooltips({ parent: tooltipHost(), position: "fixed" }),
         lineNumbers(),
         highlightActiveLineGutter(),
         highlightActiveLine(),
