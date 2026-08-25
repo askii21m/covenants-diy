@@ -23,6 +23,8 @@ export function json(body: unknown, status = 200): Response {
       "content-type": "application/json",
       "cache-control": "no-store",
       "x-content-type-options": "nosniff",
+      // _headers reaches static assets only, so the api marks itself.
+      "x-robots-tag": "noindex",
     },
   });
 }

@@ -23,6 +23,7 @@ export const onRequestGet: PagesFunction<Env, "id"> = async ({ params, env }) =>
       // give the result a document's privileges on this origin.
       "x-content-type-options": "nosniff",
       "content-security-policy": "default-src 'none'; sandbox",
+      "x-robots-tag": "noindex",
     },
   });
 };
