@@ -8,13 +8,13 @@ Signet and regtest only. A place to design and to learn, not to move money.
 
 ## What it knows
 
-OP_CHECKTEMPLATEVERIFY (BIP 119)
-OP_CHECKSIGFROMSTACK (BIP 348)
-OP_CAT (BIP 347)
-ANYPREVOUT (BIP 118)
-OP_TEMPLATEHASH (BIP 446)
-OP_INTERNALKEY (BIP 349)
-OP_PAIRCOMMIT (BIP 442)
+- OP_CHECKTEMPLATEVERIFY (BIP 119)
+- OP_CHECKSIGFROMSTACK (BIP 348)
+- OP_CAT (BIP 347)
+- ANYPREVOUT (BIP 118)
+- OP_TEMPLATEHASH (BIP 446)
+- OP_INTERNALKEY (BIP 349)
+- OP_PAIRCOMMIT (BIP 442)
 
 Choose which are active in the header and every
 script is marked enforced, degraded, or inert against that choice.
