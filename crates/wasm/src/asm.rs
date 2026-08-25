@@ -3,7 +3,7 @@
 //! `OP_RETURN_204`), which is the opposite of useful in a covenant tool.
 
 use bitcoin::hex::DisplayHex;
-use bitcoin::opcodes::all::{OP_NOP4, OP_RETURN_203, OP_RETURN_204, OP_RETURN_206};
+use bitcoin::opcodes::all::{OP_NOP4, OP_RETURN_203, OP_RETURN_204, OP_RETURN_205, OP_RETURN_206};
 use bitcoin::opcodes::Opcode;
 use bitcoin::script::Instruction;
 use bitcoin::Script;
@@ -14,6 +14,7 @@ pub fn op_name(op: Opcode) -> String {
         OP_RETURN_204 => "OP_CHECKSIGFROMSTACK".to_string(),
         OP_RETURN_206 => "OP_TEMPLATEHASH".to_string(),
         OP_RETURN_203 => "OP_INTERNALKEY".to_string(),
+        OP_RETURN_205 => "OP_PAIRCOMMIT".to_string(),
         other => other.to_string(),
     }
 }

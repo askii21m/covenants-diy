@@ -77,6 +77,8 @@ pub struct Deployments {
     pub templatehash: bool,
     /// BIP-349 OP_INTERNALKEY (0xcb, tapscript only).
     pub internalkey: bool,
+    /// BIP-442 OP_PAIRCOMMIT (0xcd, tapscript only).
+    pub paircommit: bool,
 }
 
 impl Default for Deployments {
@@ -88,6 +90,7 @@ impl Default for Deployments {
             apo: true,
             templatehash: true,
             internalkey: true,
+            paircommit: true,
         }
     }
 }
@@ -1132,6 +1135,18 @@ impl Exec {
                 self.stack.pushstr(&hash);
             }
 
+            // BIP-442. Commits to two elements at once. Each is prefixed
+            // with its own length, so a pair cannot be forged by moving the
+            // boundary between them.
+            OP_RETURN_205 if self.ctx == ExecCtx::Tapscript && self.opt.deployments.paircommit => {
+                // (x1 x2 -- pc)
+                self.stack.needn(2)?;
+                let x2 = self.stack.popstr().unwrap();
+                let x1 = self.stack.popstr().unwrap();
+                let pc = covenants_core::paircommit::pair_commit(&x1, &x2);
+                self.stack.pushstr(&pc);
+            }
+
             // BIP-349. Pushes the taproot internal key, so a leaf can name
             // the key its own output was built from without repeating it.
             OP_RETURN_203 if self.ctx == ExecCtx::Tapscript && self.opt.deployments.internalkey => {
@@ -1291,6 +1306,7 @@ fn scan_tapscript_op_success(script: &Script, deployments: &Deployments) -> Taps
             || (deployments.csfs && op == 0xcc)
             || (deployments.internalkey && op == 0xcb)
             || (deployments.templatehash && op == 0xce)
+            || (deployments.paircommit && op == 0xcd)
     };
     for instruction in script.instructions() {
         match instruction {

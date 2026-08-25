@@ -222,6 +222,7 @@ pub fn parse_opcode(s: &str) -> Result<Opcode, ()> {
                 // BIP-446 and BIP-349, the other two thirds of BIP-448.
                 "TEMPLATEHASH" | "TH" => Ok(OP_RETURN_206),
                 "INTERNALKEY" => Ok(OP_RETURN_203),
+                "PAIRCOMMIT" | "PC" => Ok(OP_RETURN_205),
 
                 "NOP4" => Ok(OP_NOP4),
                 "NOP5" => Ok(OP_NOP5),
@@ -390,6 +391,9 @@ mod tests {
         assert_eq!(parse_opcode("OP_RETURN_206").unwrap(), OP_RETURN_206);
         assert_eq!(parse_opcode("OP_INTERNALKEY").unwrap(), OP_RETURN_203);
         assert_eq!(parse_opcode("OP_RETURN_203").unwrap(), OP_RETURN_203);
+        assert_eq!(parse_opcode("OP_PAIRCOMMIT").unwrap(), OP_RETURN_205);
+        assert_eq!(parse_opcode("OP_PC").unwrap(), OP_RETURN_205);
+        assert_eq!(parse_opcode("OP_RETURN_205").unwrap(), OP_RETURN_205);
     }
 
     #[test]

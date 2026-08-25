@@ -1,6 +1,7 @@
 pub mod asm;
 pub mod ctv;
 pub mod enforce;
+pub mod paircommit;
 pub mod parse;
 pub mod sighash;
 pub mod source;

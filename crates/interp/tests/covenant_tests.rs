@@ -557,3 +557,70 @@ fn codeseparator_position_counts_opcodes_not_bytes() {
     let res = run_tapscript(script, vec![sig], tx, prevouts).unwrap();
     assert!(res.success, "{:?}", res.error);
 }
+
+// --- BIP-442 OP_PAIRCOMMIT ---------------------------------------------------
+
+const OP_PAIRCOMMIT: bitcoin::opcodes::Opcode = bitcoin::opcodes::all::OP_RETURN_205;
+
+#[test]
+fn paircommit_pushes_the_commitment() {
+    let (tx, prevouts) = fixture(1, 1);
+    let x1 = [0xdeu8; 32];
+    let x2 = [0xadu8; 32];
+    let want = covenants_core::paircommit::pair_commit(&x1, &x2);
+    let script = Builder::new()
+        .push_slice(x1)
+        .push_slice(x2)
+        .push_opcode(OP_PAIRCOMMIT)
+        .push_slice(want)
+        .push_opcode(bitcoin::opcodes::all::OP_EQUAL)
+        .into_script();
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert!(res.success, "{:?}", res.error);
+}
+
+#[test]
+fn paircommit_is_order_sensitive() {
+    let (tx, prevouts) = fixture(1, 1);
+    let x1 = [0x01u8; 32];
+    let x2 = [0x02u8; 32];
+    // The commitment for the pair the other way round must not satisfy this.
+    let swapped = covenants_core::paircommit::pair_commit(&x2, &x1);
+    let script = Builder::new()
+        .push_slice(x1)
+        .push_slice(x2)
+        .push_opcode(OP_PAIRCOMMIT)
+        .push_slice(swapped)
+        .push_opcode(bitcoin::opcodes::all::OP_EQUAL)
+        .into_script();
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert!(!res.success);
+}
+
+#[test]
+fn paircommit_needs_two_elements() {
+    let (tx, prevouts) = fixture(1, 1);
+    let script = Builder::new()
+        .push_slice([0x01u8; 32])
+        .push_opcode(OP_PAIRCOMMIT)
+        .into_script();
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert_eq!(res.error, Some(ExecError::InvalidStackOperation));
+}
+
+/// 0xcd is an OP_SUCCESSx, so with the deployment off the whole script
+/// passes rather than the opcode being skipped.
+#[test]
+fn paircommit_disabled_is_op_success() {
+    let (tx, prevouts) = fixture(1, 1);
+    let deployments = Deployments {
+        paircommit: false,
+        ..Deployments::default()
+    };
+    let script = Builder::new()
+        .push_opcode(OP_PAIRCOMMIT)
+        .push_opcode(bitcoin::opcodes::all::OP_RETURN)
+        .into_script();
+    let res = run_tapscript_with(script, vec![], tx, prevouts, deployments, None).unwrap();
+    assert!(res.success, "an inactive OP_SUCCESSx passes the script");
+}

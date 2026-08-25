@@ -130,6 +130,7 @@ fn run_asset(case: &Value, which: &str) -> Option<Result<bool, String>> {
         apo: false,
         templatehash: flags.split(',').any(|f| f == "TEMPLATEHASH"),
         internalkey: false,
+        paircommit: false,
     };
     let tx_hex = case["tx"].as_str()?;
     let mut tx: Transaction = deserialize(&Vec::<u8>::from_hex(tx_hex).ok()?).ok()?;

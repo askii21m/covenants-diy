@@ -26,6 +26,7 @@ fn deployments(r: &Ruleset) -> Deployments {
         apo: r.apo,
         templatehash: r.templatehash,
         internalkey: r.internalkey,
+        paircommit: r.paircommit,
     }
 }
 

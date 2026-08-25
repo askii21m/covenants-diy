@@ -25,6 +25,9 @@ pub struct Ruleset {
     /// BIP-349 OP_INTERNALKEY (0xcb).
     #[serde(default)]
     pub internalkey: bool,
+    /// BIP-442 OP_PAIRCOMMIT (0xcd).
+    #[serde(default)]
+    pub paircommit: bool,
 }
 
 impl Default for Ruleset {
@@ -36,6 +39,7 @@ impl Default for Ruleset {
             apo: false,
             templatehash: false,
             internalkey: false,
+            paircommit: false,
         }
     }
 }
@@ -48,6 +52,7 @@ impl Ruleset {
         apo: false,
         templatehash: false,
         internalkey: false,
+        paircommit: false,
     };
     pub const ALL: Ruleset = Ruleset {
         ctv: true,
@@ -56,6 +61,7 @@ impl Ruleset {
         apo: true,
         templatehash: true,
         internalkey: true,
+        paircommit: true,
     };
 }
 
@@ -134,6 +140,12 @@ pub fn classify(script: &Script, rules: &Ruleset) -> EnforcementReport {
             0xcb => {
                 if !rules.internalkey {
                     note("OP_INTERNALKEY", Enforcement::Open);
+                }
+            }
+            // OP_SUCCESS205: BIP-442 OP_PAIRCOMMIT.
+            0xcd => {
+                if !rules.paircommit {
+                    note("OP_PAIRCOMMIT", Enforcement::Open);
                 }
             }
             // OP_SUCCESS206: BIP-446 OP_TEMPLATEHASH.
@@ -241,6 +253,18 @@ mod tests {
             r.inactive
         );
 
+        let paircommit = Ruleset {
+            paircommit: true,
+            ..Ruleset::NONE
+        };
+        let r = classify(&s("cd"), &paircommit);
+        assert_eq!(r.status, Enforcement::Enforced);
+        assert!(
+            r.inactive.is_empty(),
+            "active OP_PAIRCOMMIT reported as {:?}",
+            r.inactive
+        );
+
         // The whole merkle-proof leaf, under CAT: enforced, nothing inactive.
         let leaf = classify(
             &s(&format!("a87c7ea8 20{} 87", "33".repeat(32)).replace(' ', "")),
@@ -255,6 +279,13 @@ mod tests {
         let r = classify(&s("7e"), &Ruleset::NONE);
         assert_eq!(r.status, Enforcement::Open);
         assert_eq!(r.inactive, vec!["OP_CAT"]);
+    }
+
+    #[test]
+    fn paircommit_is_open_when_inactive() {
+        let r = classify(&s("cd"), &Ruleset::NONE);
+        assert_eq!(r.status, Enforcement::Open);
+        assert_eq!(r.inactive, vec!["OP_PAIRCOMMIT"]);
     }
 
     /// A byte that is OP_SUCCESSx and belongs to no deployment we model.
