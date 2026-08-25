@@ -67,6 +67,9 @@
   --sans: "Instrument Sans", system-ui, sans-serif;
   --lift: 0 1px 2px rgba(14, 17, 22, 0.06), 0 1px 3px rgba(14, 17, 22, 0.04);
   --panel: 280px;
+  /* Width of the opcode doc panel, shared by the hover and the
+     completion info so the same prose wraps the same way in both. */
+  --doc-w: clamp(300px, calc(100vw - 24px), 480px);
   /* Corners. Three steps and a circle: micro for pins and grips, small for
      controls, and one radius for anything that holds other things. */
   --r-xs: 2px;
@@ -1101,14 +1104,19 @@ textarea {
   color: var(--t3);
   letter-spacing: 0.02em;
 }
-.cm-tooltip.cm-completionInfo {
+/* CodeMirror's own rule for this panel is `.cm-tooltip.cm-completionInfo`
+   behind its generated theme class, three classes and injected after this
+   stylesheet, so width and padding need a fourth to land. Without it the
+   panel keeps CodeMirror's 400px and its own padding, and stops matching
+   the hover. */
+.cm-tooltip.cm-tooltip.cm-tooltip.cm-completionInfo {
   border: 1px solid var(--line);
   background: var(--surface);
   border-radius: var(--r);
   padding: 0;
   margin-left: 6px;
-  width: 300px;
-  max-width: 300px;
+  width: var(--doc-w);
+  max-width: var(--doc-w);
 }
 .st .hint kbd {
   font: 11px var(--mono);
@@ -1118,10 +1126,13 @@ textarea {
   color: var(--t2);
   background: var(--surface);
 }
+.cm-tooltip.cm-tooltip.cm-tooltip-hover {
+  width: var(--doc-w);
+}
 .cm-doc {
   padding: 10px 12px;
   font: 13px/1.5 var(--sans);
-  max-width: 300px;
+  max-width: none;
 }
 .cm-doc-head {
   font: 12px var(--mono);
