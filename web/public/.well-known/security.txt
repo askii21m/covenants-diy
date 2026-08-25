@@ -1,0 +1,4 @@
+Contact: https://github.com/askii21m/covenants-diy/security/advisories/new
+Expires: 2027-08-25T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://covenants.diy/.well-known/security.txt
