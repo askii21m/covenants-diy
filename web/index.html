@@ -98,6 +98,43 @@
         font-size: 12px;
         color: #0f766e;
       }
+      .boot h2 {
+        margin: 10px 0 0;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #8c96a5;
+      }
+      .boot .ex {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        max-width: 640px;
+        text-align: left;
+        font-size: 13px;
+        line-height: 1.6;
+        color: #5a6472;
+      }
+      .boot .ex li {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px;
+      }
+      .boot .ex b {
+        font-weight: 600;
+        color: #0e1116;
+      }
+      .boot .ex span {
+        flex: 1;
+      }
+      .boot .ex em {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+        font-style: normal;
+        font-size: 11px;
+        color: #0f766e;
+      }
       .boot .quiet {
         font-size: 12.5px;
         color: #8c96a5;
@@ -129,7 +166,31 @@
           assembles the tapscript, computes the sighash, and steps through script execution, entirely in the browser.
           Signet and regtest only.
         </p>
+        <h2>Covenant opcodes</h2>
         <p class="ops">CTV · CSFS · CAT · APO · TEMPLATEHASH · INTERNALKEY · PAIRCOMMIT · TXHASH</p>
+        <h2>Worked examples</h2>
+        <ul class="ex">
+          <li><b>Vault</b><span>A delay to notice a theft, and a cold path to stop it</span><em>BIP-119</em></li>
+          <li><b>Congestion control</b><span>One transaction commits to a tree of payouts</span><em>BIP-119</em></li>
+          <li><b>Delegation</b><span>Hand someone one spend without handing them your key</span><em>BIP-348</em></li>
+          <li>
+            <b>Oracle payout</b><span>An attestation decides whether, never where</span><em>BIP-348 + BIP-119</em>
+          </li>
+          <li><b>Rebindable state</b><span>Three opcodes, and the update leaf is three bytes</span><em>BIP-448</em></li>
+          <li>
+            <b>Rebindable state, the older way</b><span>The same channel, using an ANYPREVOUT key type</span
+            ><em>BIP-118</em>
+          </li>
+          <li><b>Merkle proof</b><span>A script folds a leaf back into a root it commits to</span><em>BIP-347</em></li>
+          <li>
+            <b>CAT-only covenant</b><span>A covenant with no CSFS, using a signature the script builds itself</span
+            ><em>BIP-347</em>
+          </li>
+          <li>
+            <b>Recursive covenant</b><span>A coin that can only be spent back into itself</span
+            ><em>BIP-347 + BIP-348</em>
+          </li>
+        </ul>
         <p class="quiet">Loading the editor…</p>
         <noscript>
           <p>
