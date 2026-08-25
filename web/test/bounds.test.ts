@@ -23,7 +23,7 @@ import { NETWORKS } from "../src/engine";
 
 const ctx = {
   network: "signet" as const,
-  ruleset: { ctv: true, csfs: true, cat: true, apo: true, templatehash: true, internalkey: true },
+  ruleset: { ctv: true, csfs: true, cat: true, apo: true, templatehash: true, internalkey: true, paircommit: true },
 };
 let fixture: { leaf: string; spk: string; control: string; template: string; tx: string };
 

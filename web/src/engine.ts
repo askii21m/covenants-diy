@@ -9,17 +9,7 @@ export const wasmReady = init();
 void wasmReady.catch(() => {});
 export { wasm };
 
-const R = (f: Partial<Ruleset>): Ruleset => ({
-  ctv: false,
-  csfs: false,
-  cat: false,
-  apo: false,
-  templatehash: false,
-  internalkey: false,
-  ...f,
-});
-
-/** The six switches, in the order a header reads them. */
+/** Every switch, in the order a header reads them. */
 export const FLAGS: Array<{ id: keyof Ruleset; label: string; bip: string }> = [
   { id: "ctv", label: "OP_CHECKTEMPLATEVERIFY", bip: "BIP 119" },
   { id: "csfs", label: "OP_CHECKSIGFROMSTACK", bip: "BIP 348" },
@@ -27,7 +17,14 @@ export const FLAGS: Array<{ id: keyof Ruleset; label: string; bip: string }> = [
   { id: "apo", label: "ANYPREVOUT", bip: "BIP 118" },
   { id: "templatehash", label: "OP_TEMPLATEHASH", bip: "BIP 446" },
   { id: "internalkey", label: "OP_INTERNALKEY", bip: "BIP 349" },
+  { id: "paircommit", label: "OP_PAIRCOMMIT", bip: "BIP 442" },
 ];
+
+/** Every flag off, then whatever is asked for. Built from FLAGS rather
+ *  than written out, because a field left off here reads as undefined
+ *  rather than false, which is not the same thing to a checkbox. */
+const R = (f: Partial<Ruleset>): Ruleset =>
+  ({ ...Object.fromEntries(FLAGS.map((x) => [x.id, false])), ...f }) as Ruleset;
 
 /** Combinations that have been put forward, and the two configurations that
  *  are actually running. An opcode appears on its own only where it has been
@@ -47,9 +44,9 @@ export const PRESETS: Array<{
   },
   {
     label: "LNHANCE",
-    hint: "CTV + CSFS + OP_INTERNALKEY. OP_PAIRCOMMIT is also in the bundle and is not implemented here yet",
+    hint: "CTV + CSFS + OP_INTERNALKEY + OP_PAIRCOMMIT",
     group: "Proposed",
-    on: ["ctv", "csfs", "internalkey"],
+    on: ["ctv", "csfs", "internalkey", "paircommit"],
   },
   {
     label: "BIP-448",
@@ -108,7 +105,15 @@ export function summaryOf(flags: Ruleset): string {
 }
 
 const shortLabel = (id: keyof Ruleset) =>
-  ({ ctv: "CTV", csfs: "CSFS", cat: "CAT", apo: "APO", templatehash: "TEMPLATEHASH", internalkey: "INTERNALKEY" })[id];
+  ({
+    ctv: "CTV",
+    csfs: "CSFS",
+    cat: "CAT",
+    apo: "APO",
+    templatehash: "TEMPLATEHASH",
+    internalkey: "INTERNALKEY",
+    paircommit: "PAIRCOMMIT",
+  })[id];
 
 export const NETWORKS = ["signet", "regtest"] as const;
 export type Network = (typeof NETWORKS)[number];

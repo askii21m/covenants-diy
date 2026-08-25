@@ -109,6 +109,8 @@ export const DESCRIPTIONS: Record<string, string> = {
     "Push a hash of the spending transaction: version, locktime, all sequences, all outputs, the annex, and this input's index. It does not commit to which coins are being spent, which is what keeps it out of a cycle when the hash sits in the output it constrains, and what makes a signature over it rebindable. BIP-446.",
   OP_INTERNALKEY:
     "Push the taproot internal key of the output being spent, so a leaf can name the key it was built from without repeating it. BIP-349.",
+  OP_PAIRCOMMIT:
+    "Commit to the top two items as one 32-byte hash. Each half is prefixed with its own length, so the pair cannot be forged by moving the boundary between them. BIP-442.",
 
   // op_success
   OP_SUBSTR: "Disabled before taproot.",
