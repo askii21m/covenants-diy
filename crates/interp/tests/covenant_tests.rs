@@ -1,5 +1,6 @@
 use bitcoin::hashes::Hash;
 use bitcoin::hex::FromHex;
+use bitcoin::opcodes::all::OP_RETURN_187 as OP_CCV;
 use bitcoin::opcodes::all::OP_RETURN_189 as OP_TXHASH;
 use bitcoin::opcodes::all::{
     OP_CAT, OP_CHECKSIG, OP_CODESEPARATOR, OP_DROP, OP_NOP4, OP_PUSHNUM_1, OP_RETURN_204,
@@ -80,6 +81,7 @@ fn run_tapscript_with(
             internal_key,
             full_witness_size: None,
             control_block: None,
+            taptree_root: None,
         },
         script,
         witness,
@@ -618,6 +620,7 @@ fn paircommit_disabled_is_op_success() {
     let deployments = Deployments {
         paircommit: false,
         txhash: false,
+        ccv: false,
         ..Deployments::default()
     };
     let script = Builder::new()
@@ -744,6 +747,7 @@ fn txhash_inactive_is_op_success() {
     let (tx, prevouts) = fixture(1, 1);
     let deployments = Deployments {
         txhash: false,
+        ccv: false,
         ..Default::default()
     };
     let script = Builder::new()
@@ -772,5 +776,194 @@ fn an_active_txhash_does_not_pass_the_script_by_itself() {
         !res.success,
         "an active OP_TXHASH passed a script ending in OP_0, so the pre-scan \
          treated it as OP_SUCCESSx instead of executing it"
+    );
+}
+
+/// Build the scriptPubKey a contract with this data and no tree requires.
+fn ccv_spk(naked: &XOnlyPublicKey, data: &[u8]) -> ScriptBuf {
+    covenants_core::ccv::expected_script_pubkey(naked, data, None).unwrap()
+}
+
+/// <data> <index> <pk> <taptree> <mode>, bottom to top.
+fn ccv_script(data: &[u8], index: i64, pk: &[u8], taptree: &[u8], mode: i64) -> ScriptBuf {
+    use bitcoin::script::PushBytesBuf;
+    let push = |b: &mut Builder, v: &[u8]| {
+        let mut p = PushBytesBuf::new();
+        p.extend_from_slice(v).unwrap();
+        std::mem::replace(b, Builder::new()).push_slice(p)
+    };
+    let mut b = Builder::new();
+    b = push(&mut b, data);
+    b = b.push_int(index);
+    b = push(&mut b, pk);
+    b = push(&mut b, taptree);
+    b.push_int(mode)
+        .push_opcode(OP_CCV)
+        .push_opcode(OP_PUSHNUM_1)
+        .into_script()
+}
+
+/// The output the script names really is the contract, so the check passes.
+#[test]
+fn ccv_matching_output_succeeds() {
+    let (_, _, xonly) = keypair();
+    let (mut tx, prevouts) = fixture(1, 1);
+    let data = b"state-1";
+    tx.output[0].script_pubkey = ccv_spk(&xonly, data);
+    let script = ccv_script(data, 0, &xonly.serialize(), &[], 1);
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert!(res.success, "{:?}", res.error);
+}
+
+/// One byte of different state is a different contract.
+#[test]
+fn ccv_rejects_the_wrong_data() {
+    let (_, _, xonly) = keypair();
+    let (mut tx, prevouts) = fixture(1, 1);
+    tx.output[0].script_pubkey = ccv_spk(&xonly, b"state-1");
+    let script = ccv_script(b"state-2", 0, &xonly.serialize(), &[], 1);
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert_eq!(res.error, Some(ExecError::CcvMismatch));
+}
+
+/// An empty naked key means the BIP-341 NUMS point, so the contract has no
+/// key path out of it.
+#[test]
+fn ccv_empty_key_is_the_nums_point() {
+    let (mut tx, prevouts) = fixture(1, 1);
+    let nums = covenants_core::taproot::nums_internal_key();
+    tx.output[0].script_pubkey = ccv_spk(&nums, b"held");
+    let script = ccv_script(b"held", 0, &[], &[], 1);
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert!(res.success, "{:?}", res.error);
+}
+
+/// An index of -1 means the current input, which is what makes a script
+/// able to check the coin it is itself spending.
+#[test]
+fn ccv_index_minus_one_is_the_current_input() {
+    let (_, _, xonly) = keypair();
+    let (tx, mut prevouts) = fixture(1, 1);
+    prevouts[0].script_pubkey = ccv_spk(&xonly, b"self");
+    let script = ccv_script(b"self", -1, &xonly.serialize(), &[], -1);
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert!(res.success, "{:?}", res.error);
+}
+
+#[test]
+fn ccv_index_out_of_range_fails() {
+    let (_, _, xonly) = keypair();
+    let (tx, prevouts) = fixture(1, 1);
+    let script = ccv_script(b"x", 5, &xonly.serialize(), &[], 1);
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert_eq!(res.error, Some(ExecError::CcvIndexOutOfBounds));
+}
+
+/// Mode 0 carries this input's whole amount into the output, so an output
+/// worth less than the input fails.
+#[test]
+fn ccv_default_mode_requires_the_amount_to_carry() {
+    let (_, _, xonly) = keypair();
+    let (mut tx, prevouts) = fixture(1, 1);
+    tx.output[0].script_pubkey = ccv_spk(&xonly, b"v");
+    // Prevout is 100_000 and the output is 90_000, so the residual is short.
+    let script = ccv_script(b"v", 0, &xonly.serialize(), &[], 0);
+    let res = run_tapscript(script, vec![], tx.clone(), prevouts.clone()).unwrap();
+    assert_eq!(res.error, Some(ExecError::CcvAmount));
+
+    // Raise the output to the full input amount and it passes.
+    let mut tx2 = tx;
+    tx2.output[0].value = Amount::from_sat(100_000);
+    let script = ccv_script(b"v", 0, &xonly.serialize(), &[], 0);
+    let res = run_tapscript(script, vec![], tx2, prevouts).unwrap();
+    assert!(res.success, "{:?}", res.error);
+}
+
+/// Mode 1 checks the program and leaves amounts alone, so the same short
+/// output passes.
+#[test]
+fn ccv_ignore_amount_mode_skips_the_check() {
+    let (_, _, xonly) = keypair();
+    let (mut tx, prevouts) = fixture(1, 1);
+    tx.output[0].script_pubkey = ccv_spk(&xonly, b"v");
+    let script = ccv_script(b"v", 0, &xonly.serialize(), &[], 1);
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert!(res.success, "{:?}", res.error);
+}
+
+/// Mode 2 takes the output's amount out of the residual, so an output
+/// larger than the input has left fails.
+#[test]
+fn ccv_deduct_mode_cannot_overdraw() {
+    let (_, _, xonly) = keypair();
+    let (mut tx, mut prevouts) = fixture(1, 1);
+    tx.output[0].script_pubkey = ccv_spk(&xonly, b"v");
+    tx.output[0].value = Amount::from_sat(90_000);
+    prevouts[0].value = Amount::from_sat(50_000);
+    let script = ccv_script(b"v", 0, &xonly.serialize(), &[], 2);
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert_eq!(res.error, Some(ExecError::CcvAmount));
+}
+
+/// A mode the deployment does not define is reserved for a later one, and
+/// succeeds the input rather than failing it.
+#[test]
+fn ccv_undefined_mode_succeeds_the_input() {
+    let (_, _, xonly) = keypair();
+    let (tx, prevouts) = fixture(1, 1);
+    // Mode 9 is undefined, and the trailing OP_RETURN would otherwise fail.
+    let mut b = Builder::new();
+    b = b.push_slice([0u8; 0]).push_int(0);
+    let script = b
+        .push_slice(xonly.serialize())
+        .push_slice([0u8; 0])
+        .push_int(9)
+        .push_opcode(OP_CCV)
+        .push_opcode(bitcoin::opcodes::all::OP_RETURN)
+        .into_script();
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert!(res.success, "an undefined mode must succeed the input");
+}
+
+/// Inactive, 0xbb is OP_SUCCESS187: the script passes without running.
+#[test]
+fn ccv_inactive_is_op_success() {
+    let (tx, prevouts) = fixture(1, 1);
+    let deployments = Deployments {
+        ccv: false,
+        ..Default::default()
+    };
+    let script = Builder::new()
+        .push_opcode(OP_CCV)
+        .push_opcode(bitcoin::opcodes::all::OP_RETURN)
+        .into_script();
+    let res = run_tapscript_with(script, vec![], tx, prevouts, deployments, None).unwrap();
+    assert!(
+        res.success,
+        "an inactive OP_CHECKCONTRACTVERIFY passes the script"
+    );
+}
+
+/// The same guard OP_TXHASH needed: with the deployment active the BIP-342
+/// pre-scan must not treat 0xbb as OP_SUCCESSx and pass before it runs.
+#[test]
+fn an_active_ccv_does_not_pass_the_script_by_itself() {
+    let (_, _, xonly) = keypair();
+    let (mut tx, prevouts) = fixture(1, 1);
+    tx.output[0].script_pubkey = ccv_spk(&xonly, b"v");
+    let mut b = Builder::new();
+    b = b.push_slice(*b"v").push_int(0);
+    let script = b
+        .push_slice(xonly.serialize())
+        .push_slice([0u8; 0])
+        .push_int(1)
+        .push_opcode(OP_CCV)
+        .push_opcode(bitcoin::opcodes::OP_0)
+        .into_script();
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert!(
+        !res.success,
+        "an active OP_CHECKCONTRACTVERIFY passed a script ending in OP_0, so the \
+         pre-scan treated it as OP_SUCCESSx instead of executing it"
     );
 }

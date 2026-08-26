@@ -17,6 +17,7 @@ const ALL = {
   internalkey: true,
   paircommit: true,
   txhash: true,
+  ccv: true,
 };
 const OFF = { ...ALL, txhash: false };
 

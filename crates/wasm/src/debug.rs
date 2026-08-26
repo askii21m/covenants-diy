@@ -5,9 +5,10 @@
 use std::collections::HashMap;
 
 use bitcoin::consensus::deserialize;
+use bitcoin::hashes::Hash as _;
 use bitcoin::hex::{DisplayHex, FromHex};
 use bitcoin::secp256k1::XOnlyPublicKey;
-use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash};
+use bitcoin::taproot::{ControlBlock, LeafVersion, TapLeafHash, TapNodeHash};
 use bitcoin::{
     absolute, transaction, Amount, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Witness,
 };
@@ -28,6 +29,7 @@ fn deployments(r: &Ruleset) -> Deployments {
         internalkey: r.internalkey,
         paircommit: r.paircommit,
         txhash: r.txhash,
+        ccv: r.ccv,
     }
 }
 
@@ -164,8 +166,11 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
 
     // The control block carries the internal key, which a BIP-118 check
     // against the 0x01 key needs; an explicit internal_key still wins.
+    let leaf = TapLeafHash::from_script(&script, LeafVersion::TapScript);
+
     let mut internal_key = internal_key;
     let mut control_block_bytes = None;
+    let mut taptree_root = None;
     let full_witness_size = match &req.control_block {
         Some(cb) => {
             let cb = ControlBlock::decode(&hex_bytes(cb, "control_block")?)
@@ -173,6 +178,14 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
             if internal_key.is_none() {
                 internal_key = Some(cb.internal_key);
             }
+            // Fold the leaf up its merkle path to recover the tree root,
+            // which BIP-443 substitutes for a taptree of -1. An empty path
+            // means a single-leaf tree, whose root is the leaf itself.
+            let mut node = TapNodeHash::from(leaf);
+            for step in cb.merkle_branch.as_slice() {
+                node = TapNodeHash::from_node_hashes(node, *step);
+            }
+            taptree_root = Some(node.to_byte_array());
             let serialized = cb.serialize();
             let mut w = Witness::new();
             for item in &stack {
@@ -185,8 +198,6 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
         }
         None => None,
     };
-
-    let leaf = TapLeafHash::from_script(&script, LeafVersion::TapScript);
     let positions: HashMap<usize, String> = asm::instructions(&script).into_iter().collect();
     let rendered = asm::render(&script);
 
@@ -204,6 +215,7 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
             internal_key,
             full_witness_size,
             control_block: control_block_bytes,
+            taptree_root,
         },
         script,
         stack,

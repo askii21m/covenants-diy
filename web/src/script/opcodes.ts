@@ -114,6 +114,8 @@ export const DESCRIPTIONS: Record<string, string> = {
     "Commit to the top two items as one 32-byte hash. Each half is length-prefixed, so one pair cannot be passed off as a different split of the same bytes. BIP-442.",
   OP_TXHASH:
     "Pop a TxFieldSelector and push a hash of the fields it names. The empty selector matches what CTV covers; others give the BIP-341 and BIP-118 sighash modes, or feed OP_CHECKSIGFROMSTACK. BIP-346.",
+  OP_CHECKCONTRACTVERIFY:
+    "Fail unless the input or output at the given index is a key tweaked by data, then by a script tree. Stack: data, index, key, taptree, mode. A coin can require it moves into the same program with new state. BIP-443.",
 
   // op_success
   OP_SUBSTR: "Disabled before taproot.",

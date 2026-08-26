@@ -20,6 +20,7 @@ export type Ruleset = {
   internalkey: boolean;
   paircommit: boolean;
   txhash: boolean;
+  ccv: boolean;
 };
 
 export const FLAGS: Array<{ id: keyof Ruleset; label: string; bip: string }> = [
@@ -31,6 +32,7 @@ export const FLAGS: Array<{ id: keyof Ruleset; label: string; bip: string }> = [
   { id: "internalkey", label: "OP_INTERNALKEY", bip: "BIP 349" },
   { id: "paircommit", label: "OP_PAIRCOMMIT", bip: "BIP 442" },
   { id: "txhash", label: "OP_TXHASH", bip: "BIP 346" },
+  { id: "ccv", label: "OP_CHECKCONTRACTVERIFY", bip: "BIP 443" },
 ];
 export const PRESETS: Array<{ label: string; hint?: string; on: Array<keyof Ruleset> }> = [
   { label: "none", on: [] },

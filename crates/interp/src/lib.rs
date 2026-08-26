@@ -84,6 +84,8 @@ pub struct Deployments {
     pub paircommit: bool,
     /// BIP-346 OP_TXHASH (0xbd, tapscript only).
     pub txhash: bool,
+    /// BIP-443 OP_CHECKCONTRACTVERIFY (0xbb, tapscript only).
+    pub ccv: bool,
 }
 
 impl Default for Deployments {
@@ -97,6 +99,7 @@ impl Default for Deployments {
             internalkey: true,
             paircommit: true,
             txhash: true,
+            ccv: true,
         }
     }
 }
@@ -155,6 +158,9 @@ pub struct TxTemplate {
     /// it, and this tool's transactions carry empty witnesses, so it cannot
     /// be recovered from the input the way a signed transaction allows.
     pub control_block: Option<Vec<u8>>,
+    /// Merkle root of the current input's tapscript tree, which BIP-443
+    /// substitutes when a taptree of -1 is given.
+    pub taptree_root: Option<[u8; 32]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -232,6 +238,18 @@ pub struct Exec {
 
     opcode_count: usize,
     validation_weight: i64,
+
+    // BIP-443 amount tracking. The spec initialises these once per
+    // transaction and lets every input's script mutate them. This runs one
+    // input, so they cover the calls this script makes; a sibling input
+    // constraining the same output is not modelled.
+    ccv_output_min_amount: Vec<u64>,
+    ccv_output_checked_default: Vec<bool>,
+    ccv_output_checked_deduct: Vec<bool>,
+    ccv_residual_input_amount: u64,
+    // Set when an opcode succeeds the input outright rather than failing or
+    // continuing, which BIP-443 does for a mode it does not define.
+    succeed_now: bool,
 
     // runtime statistics
     stats: ExecStats,
@@ -323,6 +341,14 @@ impl Exec {
         };
         let start_validation_weight = VALIDATION_WEIGHT_OFFSET + witness_size as i64;
 
+        let n_outputs = tx.tx.output.len();
+        // The residual starts at the whole amount this input is spending.
+        let residual = tx
+            .prevouts
+            .get(tx.input_idx)
+            .map(|p| p.value.to_sat())
+            .unwrap_or(0);
+
         let mut ret = Exec {
             ctx,
             result: None,
@@ -337,6 +363,11 @@ impl Exec {
             altstack: Stack::new(),
             opcode_count: 0,
             validation_weight: start_validation_weight,
+            ccv_output_min_amount: vec![0; n_outputs],
+            ccv_output_checked_default: vec![false; n_outputs],
+            ccv_output_checked_deduct: vec![false; n_outputs],
+            ccv_residual_input_amount: residual,
+            succeed_now: false,
             last_codeseparator_pos: None,
             opcode_pos: 0,
             current_opcode_pos: 0,
@@ -624,6 +655,15 @@ impl Exec {
                 if exec || (op.to_u8() >= OP_IF.to_u8() && op.to_u8() <= OP_ENDIF.to_u8()) {
                     if let Err(err) = self.exec_opcode(op) {
                         return self.failop(err, op);
+                    }
+                    if self.succeed_now {
+                        self.result = Some(ExecutionResult {
+                            success: true,
+                            error: None,
+                            opcode: Some(op),
+                            final_stack: self.stack.clone(),
+                        });
+                        return Err(self.result.as_ref().unwrap());
                     }
                 }
             }
@@ -1194,6 +1234,129 @@ impl Exec {
                 self.stack.pushstr(&hash);
             }
 
+            // BIP-443. Checks that an input or output of this transaction is
+            // the contract the script names: a naked key tweaked by data,
+            // then taptweaked by a tree. Stack, bottom to top, is
+            // <data> <index> <pk> <taptree> <mode>, and all five are dropped.
+            OP_RETURN_187 if self.ctx == ExecCtx::Tapscript && self.opt.deployments.ccv => {
+                use covenants_core::ccv::{self, CcvMode};
+
+                self.stack.needn(5)?;
+                let mode_num = self.stack.topnum(-1, self.opt.require_minimal)?;
+                let taptree = self.stack.topstr(-2)?;
+                let pk = self.stack.topstr(-3)?;
+                let index_raw = self.stack.topstr(-4)?;
+                let data = self.stack.topstr(-5)?;
+
+                // An undefined mode is left for a later deployment to give
+                // meaning to, and succeeds the input outright.
+                let Some(mode) = CcvMode::from_i64(mode_num) else {
+                    self.succeed_now = true;
+                    return Ok(());
+                };
+
+                let index = if index_raw.is_empty() {
+                    0i64
+                } else {
+                    read_scriptint(
+                        &index_raw,
+                        DEFAULT_MAX_SCRIPTINT_SIZE,
+                        self.opt.require_minimal,
+                    )?
+                };
+                let index = if index == -1 {
+                    self.tx.input_idx as i64
+                } else if index >= 0 {
+                    index
+                } else {
+                    return Err(ExecError::CcvParameter);
+                };
+
+                let target_script = if mode.targets_input() {
+                    let i = usize::try_from(index).map_err(|_| ExecError::CcvIndexOutOfBounds)?;
+                    &self
+                        .tx
+                        .prevouts
+                        .get(i)
+                        .ok_or(ExecError::CcvIndexOutOfBounds)?
+                        .script_pubkey
+                } else {
+                    let i = usize::try_from(index).map_err(|_| ExecError::CcvIndexOutOfBounds)?;
+                    &self
+                        .tx
+                        .tx
+                        .output
+                        .get(i)
+                        .ok_or(ExecError::CcvIndexOutOfBounds)?
+                        .script_pubkey
+                };
+
+                // -1 means the current input's tree; empty means no taptweak
+                // at all, which is a different thing from an empty tree.
+                let taptree = if taptree.is_empty() {
+                    None
+                } else if taptree.len() == 32 {
+                    Some(<[u8; 32]>::try_from(&taptree[..]).unwrap())
+                } else if read_scriptint(&taptree, DEFAULT_MAX_SCRIPTINT_SIZE, false) == Ok(-1) {
+                    Some(self.tx.taptree_root.ok_or(ExecError::CcvTaptreeMissing)?)
+                } else {
+                    return Err(ExecError::CcvParameter);
+                };
+
+                // Empty means the NUMS point, so the contract has no key path.
+                let naked = if pk.is_empty() {
+                    covenants_core::taproot::nums_internal_key()
+                } else if pk.len() == 32 {
+                    XOnlyPublicKey::from_slice(&pk).map_err(|_| ExecError::CcvParameter)?
+                } else if read_scriptint(&pk, DEFAULT_MAX_SCRIPTINT_SIZE, false) == Ok(-1) {
+                    self.tx
+                        .internal_key
+                        .ok_or(ExecError::CcvInternalKeyMissing)?
+                } else {
+                    return Err(ExecError::CcvParameter);
+                };
+
+                let expected = ccv::expected_script_pubkey(&naked, &data, taptree)
+                    .map_err(ExecError::CcvKey)?;
+                if target_script.as_bytes() != expected.as_bytes() {
+                    return Err(ExecError::CcvMismatch);
+                }
+
+                if !mode.targets_input() {
+                    let i = index as usize;
+                    let out_amount = self.tx.tx.output[i].value.to_sat();
+                    match mode {
+                        CcvMode::CheckOutput => {
+                            if self.ccv_output_checked_deduct[i] {
+                                return Err(ExecError::CcvAmount);
+                            }
+                            self.ccv_output_min_amount[i] = self.ccv_output_min_amount[i]
+                                .saturating_add(self.ccv_residual_input_amount);
+                            self.ccv_residual_input_amount = 0;
+                            if out_amount < self.ccv_output_min_amount[i] {
+                                return Err(ExecError::CcvAmount);
+                            }
+                            self.ccv_output_checked_default[i] = true;
+                        }
+                        CcvMode::CheckOutputDeductAmount => {
+                            if self.ccv_residual_input_amount < out_amount {
+                                return Err(ExecError::CcvAmount);
+                            }
+                            if self.ccv_output_checked_default[i]
+                                || self.ccv_output_checked_deduct[i]
+                            {
+                                return Err(ExecError::CcvAmount);
+                            }
+                            self.ccv_residual_input_amount -= out_amount;
+                            self.ccv_output_checked_deduct[i] = true;
+                        }
+                        CcvMode::CheckOutputIgnoreAmount | CcvMode::CheckInput => {}
+                    }
+                }
+
+                self.stack.popn(5).unwrap();
+            }
+
             // BIP-349. Pushes the taproot internal key, so a leaf can name
             // the key its own output was built from without repeating it.
             OP_RETURN_203 if self.ctx == ExecCtx::Tapscript && self.opt.deployments.internalkey => {
@@ -1355,6 +1518,7 @@ fn scan_tapscript_op_success(script: &Script, deployments: &Deployments) -> Taps
             || (deployments.templatehash && op == 0xce)
             || (deployments.paircommit && op == 0xcd)
             || (deployments.txhash && op == 0xbd)
+            || (deployments.ccv && op == 0xbb)
     };
     for instruction in script.instructions() {
         match instruction {

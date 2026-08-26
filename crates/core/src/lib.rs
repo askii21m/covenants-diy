@@ -1,4 +1,5 @@
 pub mod asm;
+pub mod ccv;
 pub mod ctv;
 pub mod enforce;
 pub mod paircommit;

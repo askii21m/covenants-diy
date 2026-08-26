@@ -10,6 +10,7 @@ export const NODE_TESTS = [
   "test/share.test.ts",
   "test/functions.test.ts",
   "test/txhash.test.ts",
+  "test/ccv.test.ts",
 ];
 
 export default defineConfig({

@@ -933,6 +933,13 @@ pub fn opcodes() -> Result<Ts<OpcodeCatalog>, JsError> {
         Some("paircommit"),
     );
     add("OP_TXHASH", None, "covenants", "covenant", Some("txhash"));
+    add(
+        "OP_CHECKCONTRACTVERIFY",
+        Some("OP_CCV"),
+        "covenants",
+        "covenant",
+        Some("ccv"),
+    );
 
     // Disabled before taproot, OP_SUCCESSx inside a tapscript: writing one
     // makes the whole script pass, which is never what an author means.

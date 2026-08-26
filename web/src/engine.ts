@@ -19,6 +19,7 @@ export const FLAGS: Array<{ id: keyof Ruleset; label: string; bip: string }> = [
   { id: "internalkey", label: "OP_INTERNALKEY", bip: "BIP 349" },
   { id: "paircommit", label: "OP_PAIRCOMMIT", bip: "BIP 442" },
   { id: "txhash", label: "OP_TXHASH", bip: "BIP 346" },
+  { id: "ccv", label: "OP_CHECKCONTRACTVERIFY", bip: "BIP 443" },
 ];
 
 /** Every flag off, then whatever is asked for. Built from FLAGS rather
@@ -58,6 +59,7 @@ export const PRESETS: Array<{
   { label: "CAT", hint: "BIP 347", group: "Proposed", on: ["cat"] },
   { label: "APO", hint: "BIP 118", group: "Proposed", on: ["apo"] },
   { label: "TXHASH", hint: "BIP 346", group: "Proposed", on: ["txhash"] },
+  { label: "CCV", hint: "BIP 443", group: "Proposed", on: ["ccv"] },
   { label: "mainnet today", hint: "none of them", group: "Running", on: [] },
   { label: "Inquisition signet", hint: "CTV, CSFS, CAT and APO", group: "Running", on: ["ctv", "csfs", "cat", "apo"] },
 ];
@@ -116,6 +118,7 @@ const shortLabel = (id: keyof Ruleset) =>
     internalkey: "INTERNALKEY",
     paircommit: "PAIRCOMMIT",
     txhash: "TXHASH",
+    ccv: "CCV",
   })[id];
 
 export const NETWORKS = ["signet", "regtest"] as const;

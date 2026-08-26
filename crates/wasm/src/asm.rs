@@ -4,7 +4,8 @@
 
 use bitcoin::hex::DisplayHex;
 use bitcoin::opcodes::all::{
-    OP_NOP4, OP_RETURN_189, OP_RETURN_203, OP_RETURN_204, OP_RETURN_205, OP_RETURN_206,
+    OP_NOP4, OP_RETURN_187, OP_RETURN_189, OP_RETURN_203, OP_RETURN_204, OP_RETURN_205,
+    OP_RETURN_206,
 };
 use bitcoin::opcodes::Opcode;
 use bitcoin::script::Instruction;
@@ -18,6 +19,7 @@ pub fn op_name(op: Opcode) -> String {
         OP_RETURN_203 => "OP_INTERNALKEY".to_string(),
         OP_RETURN_205 => "OP_PAIRCOMMIT".to_string(),
         OP_RETURN_189 => "OP_TXHASH".to_string(),
+        OP_RETURN_187 => "OP_CHECKCONTRACTVERIFY".to_string(),
         other => other.to_string(),
     }
 }

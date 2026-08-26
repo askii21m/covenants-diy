@@ -67,6 +67,7 @@ fn run_case(case: &Value) -> Result<bool, String> {
             internal_key: Some(cb.internal_key),
             full_witness_size: None,
             control_block: None,
+            taptree_root: None,
         },
         script,
         stack,
@@ -133,6 +134,7 @@ fn run_asset(case: &Value, which: &str) -> Option<Result<bool, String>> {
         internalkey: false,
         paircommit: false,
         txhash: false,
+        ccv: false,
     };
     let tx_hex = case["tx"].as_str()?;
     let mut tx: Transaction = deserialize(&Vec::<u8>::from_hex(tx_hex).ok()?).ok()?;
@@ -187,6 +189,7 @@ fn run_asset(case: &Value, which: &str) -> Option<Result<bool, String>> {
             internal_key: Some(cb.internal_key),
             full_witness_size: None,
             control_block: None,
+            taptree_root: None,
         },
         script,
         stack,

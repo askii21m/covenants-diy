@@ -41,6 +41,25 @@ pub enum ExecError {
     InternalKeyMissing,
     /// BIP-346: the TxFieldSelector does not name a valid set of fields.
     TxFieldSelector(covenants_core::txhash::TxHashError),
+    /// BIP-443: a CHECKCONTRACTVERIFY parameter is not one of the shapes
+    /// the opcode accepts.
+    CcvParameter,
+    /// BIP-443: the index names an input or output the transaction has not got.
+    CcvIndexOutOfBounds,
+    /// BIP-443: the target's scriptPubKey is not the contract the script names.
+    CcvMismatch,
+    /// BIP-443: the amount rules for the target output were broken, either by
+    /// two incompatible checks on it or by an output that takes more than the
+    /// input has left.
+    CcvAmount,
+    /// BIP-443: a taptree of -1 needs the current input's tree, which was not
+    /// provided in the TxTemplate.
+    CcvTaptreeMissing,
+    /// BIP-443: a naked key of -1 needs the taproot internal key, which was
+    /// not provided in the TxTemplate.
+    CcvInternalKeyMissing,
+    /// BIP-443: the key or a tweak of it is not a usable point.
+    CcvKey(covenants_core::ccv::CcvError),
 
     // new ones for us
     ScriptIntNumericOverflow,

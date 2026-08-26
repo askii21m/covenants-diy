@@ -31,6 +31,9 @@ pub struct Ruleset {
     /// BIP-346 OP_TXHASH (0xbd).
     #[serde(default)]
     pub txhash: bool,
+    /// BIP-443 OP_CHECKCONTRACTVERIFY (0xbb).
+    #[serde(default)]
+    pub ccv: bool,
 }
 
 impl Default for Ruleset {
@@ -44,6 +47,7 @@ impl Default for Ruleset {
             internalkey: false,
             paircommit: false,
             txhash: false,
+            ccv: false,
         }
     }
 }
@@ -58,6 +62,7 @@ impl Ruleset {
         internalkey: false,
         paircommit: false,
         txhash: false,
+        ccv: false,
     };
     pub const ALL: Ruleset = Ruleset {
         ctv: true,
@@ -68,6 +73,7 @@ impl Ruleset {
         internalkey: true,
         paircommit: true,
         txhash: true,
+        ccv: true,
     };
 }
 
@@ -146,6 +152,12 @@ pub fn classify(script: &Script, rules: &Ruleset) -> EnforcementReport {
             0xcb => {
                 if !rules.internalkey {
                     note("OP_INTERNALKEY", Enforcement::Open);
+                }
+            }
+            // OP_SUCCESS187: BIP-443 OP_CHECKCONTRACTVERIFY.
+            0xbb => {
+                if !rules.ccv {
+                    note("OP_CHECKCONTRACTVERIFY", Enforcement::Open);
                 }
             }
             // OP_SUCCESS189: BIP-346 OP_TXHASH.
@@ -303,9 +315,9 @@ mod tests {
     /// A byte that is OP_SUCCESSx and belongs to no deployment we model.
     #[test]
     fn an_unmodelled_op_success_is_still_open() {
-        let r = classify(&s("bb"), &Ruleset::ALL);
+        let r = classify(&s("62"), &Ruleset::ALL);
         assert_eq!(r.status, Enforcement::Open);
-        assert_eq!(r.inactive, vec!["OP_SUCCESS187"]);
+        assert_eq!(r.inactive, vec!["OP_SUCCESS98"]);
     }
 
     #[test]

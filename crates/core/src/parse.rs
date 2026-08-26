@@ -227,6 +227,8 @@ pub fn parse_opcode(s: &str) -> Result<Opcode, ()> {
                 // drafted: 187 went to OP_CHECKCONTRACTVERIFY and 188 to
                 // OP_VAULT.
                 "TXHASH" => Ok(OP_RETURN_189),
+                // BIP-443. OP_SUCCESS187.
+                "CHECKCONTRACTVERIFY" | "CCV" => Ok(OP_RETURN_187),
 
                 "NOP4" => Ok(OP_NOP4),
                 "NOP5" => Ok(OP_NOP5),
