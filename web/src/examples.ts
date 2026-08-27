@@ -1734,17 +1734,16 @@ export interface ExampleEntry {
   build: () => Example;
 }
 
-/** Grouped by what has to be deployed for the example to mean anything,
- *  in the order someone meeting covenants would want to read them:
- *  commit to a transaction, then check a signature, then rebind one, then
- *  take the transaction apart. */
+/** Grouped by what the construction does, which is the axis a reader is
+ *  choosing along. Grouping by proposal instead put the two vaults in
+ *  different groups, where the thing worth comparing was how each one is
+ *  built, and left the badge repeating the heading on every row. */
 export const EXAMPLE_GROUPS: Array<{ title: string; keys: string[] }> = [
-  { title: "Taproot, with no covenant at all", keys: ["hotcold"] },
-  { title: "CTV · commit to the next transaction", keys: ["vault", "pool"] },
-  { title: "OP_VAULT · rewrite one leaf of the tree", keys: ["opvault"] },
-  { title: "CSFS · check a signature over a message", keys: ["delegation", "oracle"] },
-  { title: "Rebindable signatures", keys: ["bip448", "eltoo"] },
-  { title: "CAT · take bytes apart and put them back", keys: ["merkle", "catonly", "recursive"] },
+  { title: "Start here", keys: ["hotcold"] },
+  { title: "Commit to the next transaction", keys: ["vault", "opvault", "pool"] },
+  { title: "Sign a message, not a transaction", keys: ["delegation", "oracle"] },
+  { title: "Rebind a signature", keys: ["bip448", "eltoo"] },
+  { title: "Build it out of bytes", keys: ["merkle", "catonly", "recursive"] },
 ];
 
 export const EXAMPLES: Record<string, ExampleEntry> = {
@@ -1756,14 +1755,14 @@ export const EXAMPLES: Record<string, ExampleEntry> = {
     build: hotcold,
   },
   opvault: {
-    label: "OP_VAULT",
+    label: "Vault, with OP_VAULT",
     name: "op_vault",
     blurb: "Announce a withdrawal by rewriting one leaf, and keep the way to stop it",
     needs: "BIP-345",
     build: opvault,
   },
   vault: {
-    label: "Vault",
+    label: "Vault, with CTV",
     name: "vault",
     blurb: "A delay to notice a theft, and a cold path to stop it",
     needs: "BIP-119",

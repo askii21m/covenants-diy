@@ -151,7 +151,7 @@ describe("boot shell", () => {
   const listed = (h: string) => {
     const ul = h.match(/<ul class="ex">([\s\S]*?)<\/ul>/);
     expect(ul, "the boot shell has no example list").not.toBeNull();
-    return [...ul![1].matchAll(/<b>([^<]+)<\/b>/g)].map((m) => m[1]);
+    return [...ul![1].matchAll(/<b>([\s\S]*?)<\/b\s*>/g)].map((m) => m[1].trim());
   };
 
   it("lists exactly the examples the menu offers", async () => {
