@@ -196,6 +196,20 @@ describe("boot shell", () => {
     expect(shown).toEqual(FLAGS.map((f) => f.label));
   });
 
+  // The README is a third hand-written copy of the same list, and the one
+  // nothing renders, so it goes stale quietly: it was still nine examples
+  // long and missing OP_VAULT when both had been true for a while.
+  it("is matched by the README", async () => {
+    const md = await readFile(new URL("../../README.md", import.meta.url), "utf8");
+    const listed = [...md.matchAll(/^- (\S+) \((BIP \d+)\)$/gm)].map((m) => `${m[1]} (${m[2]})`);
+    expect(listed).toEqual(FLAGS.map((f) => `${f.label} (${f.bip})`));
+
+    const words: Record<string, number> = { Nine: 9, Ten: 10, Eleven: 11, Twelve: 12, Thirteen: 13, Fourteen: 14 };
+    const count = md.match(/^(\w+) worked examples/m);
+    expect(count, "the README does not say how many examples there are").not.toBeNull();
+    expect(words[count![1]], `README says ${count![1]}`).toBe(Object.keys(EXAMPLES).length);
+  });
+
   // The inline JSON-LD is allowed by a sha256 in _headers. Editing the block
   // without recomputing it does not fail any build; the browser just drops
   // the script.

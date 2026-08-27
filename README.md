@@ -17,13 +17,15 @@ Signet and regtest only. A place to design and to learn, not to move money.
 - OP_PAIRCOMMIT (BIP 442)
 - OP_TXHASH (BIP 346)
 - OP_CHECKCONTRACTVERIFY (BIP 443)
+- OP_VAULT (BIP 345)
 
 Choose which are active in the header and every
 script is marked enforced, degraded, or open against that choice.
 
-Nine worked examples ship with it: a vault, congestion control,
-delegation, an oracle payout, rebindable state both ways, a merkle proof,
-a covenant using only OP_CAT, and a recursive covenant.
+Twelve worked examples ship with it: hot and cold keys, two vaults built
+different ways, congestion control, an Ark round, delegation, an oracle
+payout, rebindable state both ways, a merkle proof, a covenant using only
+OP_CAT, and a recursive covenant.
 
 ## Build
 
