@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.functions.json",
+    "og": "python3 scripts/og.py",
     "wasm": "wasm-pack build ../crates/wasm --target web --out-dir ../../web/pkg --out-name covenants",
     "test": "vitest run && vitest run --config vitest.node.config.ts",
     "format": "prettier --write .",

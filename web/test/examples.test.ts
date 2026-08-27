@@ -210,6 +210,26 @@ describe("boot shell", () => {
     expect(words[count![1]], `README says ${count![1]}`).toBe(Object.keys(EXAMPLES).length);
   });
 
+  // The preview image is pixels, so no test can read the opcodes off it.
+  // It carries the line it was drawn with instead, and `npm run og` puts
+  // both back in step.
+  it("is matched by the preview image", async () => {
+    const png = await readFile(new URL("../public/og.png", import.meta.url));
+    let at = 8;
+    let drawn: string | null = null;
+    while (at + 8 <= png.length) {
+      const len = png.readUInt32BE(at);
+      if (png.toString("latin1", at + 4, at + 8) === "tEXt") {
+        const body = png.toString("latin1", at + 8, at + 8 + len);
+        const [key, ...rest] = body.split("\0");
+        if (key === "opcodes") drawn = rest.join("\0");
+      }
+      at += 12 + len;
+    }
+    expect(drawn, "og.png carries no opcode line; run npm run og").not.toBeNull();
+    expect(drawn!.split("\u00b7").map((x) => x.trim())).toEqual(FLAGS.map((f) => shortLabel(f.id)));
+  });
+
   // The inline JSON-LD is allowed by a sha256 in _headers. Editing the block
   // without recomputing it does not fail any build; the browser just drops
   // the script.
