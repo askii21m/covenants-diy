@@ -787,21 +787,23 @@ textarea {
 /* An input dot says whether the node needs the value: filled for one it
    cannot compute without, hollow for one it can, half for one needed only
    under the condition the title gives.
-   The fill stops a pixel short of the edge so the ring, which carries the
-   port type, is still a ring. Filling to the edge loses it entirely on the
-   types that have no colour of their own and so border in --t3, which is
-   the same grey the fill uses. */
+   The fill is a tint of the pin's own ring colour, so it reads against the
+   ring without a gap between them. A gap is a second painted layer, and at
+   fractional browser zoom it rounds to device pixels on its own and leaves
+   the middle sitting off centre. */
 .cov .r.in .p {
   left: -6px;
-  background: var(--t3);
-  box-shadow: inset 0 0 0 1px var(--surface);
+  background: color-mix(in srgb, var(--pin, var(--t3)) 55%, var(--surface));
 }
 .cov .r.in .p.opt {
   background: var(--surface);
-  box-shadow: none;
 }
 .cov .r.in .p.cond {
-  background: linear-gradient(to right, var(--t3) 0 50%, var(--surface) 50% 100%);
+  background: linear-gradient(
+    to right,
+    color-mix(in srgb, var(--pin, var(--t3)) 55%, var(--surface)) 0 50%,
+    var(--surface) 50% 100%
+  );
 }
 .cov .r.out .p {
   right: -6px;
@@ -1387,35 +1389,45 @@ textarea {
   background: var(--surface);
 }
 .p.t-hash {
+  --pin: var(--t-hash);
   border-color: var(--t-hash) !important;
 }
 .p.t-script {
+  --pin: var(--t-script);
   border-color: var(--t-script) !important;
 }
 .p.t-tx {
+  --pin: var(--t-tx);
   border-color: var(--t-tx) !important;
 }
 .p.t-witness {
+  --pin: var(--t-witness);
   border-color: var(--t-witness) !important;
   border-radius: var(--r-xs) !important;
 }
 .p.t-spk {
+  --pin: var(--t-spk);
   border-color: var(--t-spk) !important;
 }
 .p.t-hex {
+  --pin: var(--t-hex);
   border-color: var(--t-hex) !important;
 }
 .p.t-outpoint {
+  --pin: var(--t-outpoint);
   border-color: var(--t-outpoint) !important;
 }
 .p.t-number,
 .p.t-text {
+  --pin: var(--t-number);
   border-color: var(--t-number) !important;
 }
 .p.t-address {
+  --pin: var(--t-address);
   border-color: var(--t-address) !important;
 }
 .p.t-any {
+  --pin: var(--t-any);
   border-color: var(--t-any) !important;
 }
 .cov .r.out .p.react-flow__handle {
