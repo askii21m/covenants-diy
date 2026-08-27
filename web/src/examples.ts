@@ -71,6 +71,7 @@ const MEASURED: Record<string, number> = {
   "template:1:2": 356,
   "taproot:1": 284,
   "taproot:2": 340,
+  "taproot:3": 396,
   "transaction:1:1": 372,
   "transaction:1:2": 450,
   execute: 467,
@@ -1355,6 +1356,208 @@ export function opvault(): Example {
   return { nodes, edges, network: "signet", ruleset: "ctv+vault" };
 }
 
+// --- Ark -------------------------------------------------------------------
+
+/** An Ark round: one output on chain holding many balances.
+ *
+ *  The operator gathers everyone into a single UTXO and commits it, with
+ *  CTV, to the tree that splits it back into one virtual output per owner.
+ *  Nothing else touches the chain while the round runs: an owner hands a
+ *  balance on by having the operator sign for it, and the tree stays
+ *  unpublished.
+ *
+ *  What makes that safe to join is the leaf below. Each virtual output can
+ *  be spent three ways: with the operator, which is the quick path everyone
+ *  uses; by its owner alone once a delay has run, which is the path that
+ *  needs nobody's help; and by the operator alone once the round has
+ *  expired, which is how the shared coin is eventually reclaimed. The
+ *  second is the one worth watching, so it is the one spent here.
+ */
+export function ark(): Example {
+  // Laid out so nothing reaches backwards: every node sits right of what it
+  // reads, and each row hands down to the next through its own lane. The
+  // exit chain used to start under the left of the canvas while its coin
+  // came from the far right, and every one of those wires crossed the graph
+  // to get there.
+  const nodes: FlowNode[] = [];
+  const EXIT_DELAY = 144;
+  const ROUND_EXPIRY = 900_000;
+  const ROUND = 100_000;
+  const VTXO = 49_000;
+
+  // --- the virtual output, and its three ways out -----------------------
+  const alice = node("alice", "key", col(0), 0, { secret: "11".repeat(32) });
+  const asp = node("operator", "key", col(0), 700, { secret: "22".repeat(32) });
+
+  const together = node("together", "tapscript", col(1), 0, {
+    source: [
+      "# The quick path: the operator",
+      "# signs alongside the owner.",
+      "@operator OP_CHECKSIGVERIFY",
+      "@alice OP_CHECKSIG",
+    ].join("\n"),
+  });
+  const alone = node("alone", "tapscript", col(1), 340, {
+    source: [
+      "# Leaving without asking, once the",
+      "# delay has run. Nobody can withhold",
+      "# this one.",
+      `${EXIT_DELAY} OP_CHECKSEQUENCEVERIFY OP_DROP`,
+      "@alice OP_CHECKSIG",
+    ].join("\n"),
+  });
+  const reclaim = node("reclaim", "tapscript", col(1), 700, {
+    source: [
+      "# Once the round has expired the",
+      "# operator takes the shared coin back.",
+      `${ROUND_EXPIRY} OP_CHECKLOCKTIMEVERIFY OP_DROP`,
+      "@operator OP_CHECKSIG",
+    ].join("\n"),
+  });
+  const vtxo = node("vtxo", "taproot", col(2), 330, { nLeaves: 3 });
+
+  // --- the round, committed before anyone pays in -----------------------
+  const split = node("split", "template", col(3), 380, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 2,
+    in0_seq: 0xfffffffd,
+    out0_value: VTXO,
+    out1_value: VTXO,
+    out1_spk: p2tr("55"),
+  });
+  const roundLeaf = node("round_leaf", "tapscript", col(4), 380, {
+    source: ["# The only shape the shared coin", "# can ever take.", "@split OP_CHECKTEMPLATEVERIFY"].join("\n"),
+  });
+  const round = node("round", "taproot", col(5), 380, { nLeaves: 1 });
+  nodes.push(alice, asp, together, alone, reclaim, vtxo, split, roundLeaf, round);
+
+  const { lane: laneA, next: MID } = band(nodes, 5);
+
+  // --- unrolling the round on chain --------------------------------------
+  const funding = node("funding", "outpoint", col(5), MID, { txid: "f".repeat(64), vout: 0, value: ROUND });
+  const roundWit = node("round_witness", "witness", col(6), MID, { nItems: 0 });
+  const roundTx = node("round_tx", "transaction", col(7), MID, { nIn: 1, nOut: 2 });
+  const checkRound = node("check_round", "execute", col(8), MID, { input_index: 0, prevout_value: ROUND });
+  nodes.push(funding, roundWit, roundTx, checkRound);
+
+  const { lane: laneB, next: BOT } = band(nodes, 11);
+
+  // --- one owner leaving on their own ------------------------------------
+  const exitTpl = node("exit", "template", col(7), BOT, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 1,
+    // The leaf's OP_CSV reads this. One below the delay and it is rejected,
+    // which is the whole point of waiting.
+    in0_seq: EXIT_DELAY,
+    out0_value: 48_000,
+    out0_spk: p2tr("66"),
+  });
+  const unsigned = node("unsigned", "transaction", col(8), BOT, { nIn: 1, nOut: 1 });
+  const sighash = node("sighash", "sighash", col(9), BOT, {
+    hash_type: "DEFAULT",
+    input_index: 0,
+    prevout_value: VTXO,
+  });
+  const exitSig = node("exit_sig", "sign", col(10), BOT, {});
+  const exitWit = node("exit_witness", "witness", col(11), BOT, { nItems: 1 });
+  const signed = node("signed", "transaction", col(12), BOT, { nIn: 1, nOut: 1 });
+  const checkExit = node("check_exit", "execute", col(13), BOT, { input_index: 0, prevout_value: VTXO });
+  nodes.push(exitTpl, unsigned, sighash, exitSig, exitWit, signed, checkExit);
+
+  // Lanes ordered by how far right they land, so they never cross.
+  const hopsA = [
+    via("aLeaf", ["round_leaf", "script"], 4, 6, laneA(0), ["round_witness", "script"]),
+    via("aCtrl", ["round", "control0"], 5, 6, laneA(1), ["round_witness", "control"]),
+    via("aTpl", ["split", "template"], 3, 7, laneA(2), ["round_tx", "template"]),
+    via("aScript", ["round_leaf", "script"], 4, 8, laneA(3), ["check_round", "script"]),
+    via("aSpk", ["round", "spk"], 5, 8, laneA(4), ["check_round", "prevout_spk"]),
+  ];
+  const hopsB = [
+    via("bOut", ["round_tx", "outpoint0"], 7, 8, laneB(0), ["unsigned", "prevout0"]),
+    via("bVal", ["round_tx", "outvalue0"], 7, 8, laneB(1), ["unsigned", "value0"]),
+    via("bLeaf", ["alone", "script"], 1, 9, laneB(2), ["sighash", "leaf"]),
+    via("bSpk", ["vtxo", "spk"], 2, 9, laneB(3), ["sighash", "prevout_spk"]),
+    via("bKey", ["alice", "sk"], 0, 10, laneB(4), ["exit_sig", "secret"]),
+    via("bWitScript", ["alone", "script"], 1, 11, laneB(5), ["exit_witness", "script"]),
+    // Leaf 1 is the one being taken, so this is the control block for it.
+    via("bCtrl", ["vtxo", "control1"], 2, 11, laneB(6), ["exit_witness", "control"]),
+    via("bPrev", ["round_tx", "outpoint0"], 7, 12, laneB(7), ["signed", "prevout0"]),
+    via("bPrevVal", ["round_tx", "outvalue0"], 7, 12, laneB(8), ["signed", "value0"]),
+    via("bRunScript", ["alone", "script"], 1, 13, laneB(9), ["check_exit", "script"]),
+    via("bRunSpk", ["vtxo", "spk"], 2, 13, laneB(10), ["check_exit", "prevout_spk"]),
+  ];
+  nodes.push(...hopsA.flatMap((h) => h.nodes), ...hopsB.flatMap((h) => h.nodes));
+
+  const edges: Edge[] = [
+    // building: the leaf, the virtual output, then the round over it
+    wire("alice", "pubkey", "together", "ref_alice"),
+    wire("operator", "pubkey", "together", "ref_operator"),
+    wire("alice", "pubkey", "alone", "ref_alice"),
+    wire("operator", "pubkey", "reclaim", "ref_operator"),
+    wire("together", "script", "vtxo", "leaf0"),
+    wire("alone", "script", "vtxo", "leaf1"),
+    wire("reclaim", "script", "vtxo", "leaf2"),
+    wire("vtxo", "spk", "split", "out0_spk"),
+    wire("split", "ctv0", "round_leaf", "ref_split"),
+    wire("round_leaf", "script", "round", "leaf0"),
+    ...hopsA.flatMap((h) => h.edges),
+    ...hopsB.flatMap((h) => h.edges),
+    // unrolling: the shared coin can only become the tree it committed to
+    wire("funding", "outpoint", "round_tx", "prevout0"),
+    wire("funding", "value", "round_tx", "value0"),
+    wire("round_witness", "witness", "round_tx", "witness0"),
+    wire("round_witness", "witness", "check_round", "witness"),
+    wire("round_tx", "hex", "check_round", "tx"),
+    // leaving: sign the leaf nobody else can withhold
+    wire("exit", "template", "unsigned", "template"),
+    wire("exit", "template", "signed", "template"),
+    wire("unsigned", "hex", "sighash", "tx"),
+    wire("sighash", "sighash", "exit_sig", "message"),
+    wire("sighash", "type_byte", "exit_sig", "hash_type"),
+    wire("exit_sig", "sig", "exit_witness", "item0"),
+    wire("exit_witness", "witness", "signed", "witness0"),
+    wire("exit_witness", "witness", "check_exit", "witness"),
+    wire("signed", "hex", "check_exit", "tx"),
+  ];
+
+  nodes.unshift(
+    around("c_vtxo", "One balance, and the three ways it can leave", "teal", nodes, [
+      "alice",
+      "operator",
+      "together",
+      "alone",
+      "reclaim",
+      "vtxo",
+    ]),
+    around("c_round", "Everyone gathered into one coin, committed to the split", "amber", nodes, [
+      "split",
+      "round_leaf",
+      "round",
+    ]),
+    around("c_unroll", "The shared coin can only become the tree it promised", "slate", nodes, [
+      "funding",
+      "round_witness",
+      "round_tx",
+      "check_round",
+    ]),
+    around("c_exit", "Leaving without the operator, once the delay has run", "blue", nodes, [
+      "exit",
+      "unsigned",
+      "sighash",
+      "exit_sig",
+      "exit_witness",
+      "signed",
+      "check_exit",
+    ]),
+  );
+
+  return { nodes, edges, network: "signet", ruleset: "ctv" };
+}
+
 // --- recursive covenant with OP_CAT ------------------------------------------
 
 /** A coin that can only ever be spent back into itself.
@@ -1743,7 +1946,7 @@ export interface ExampleEntry {
  *  makes it worth reading first is that it needs no proposal at all. */
 export const EXAMPLE_GROUPS: Array<{ title: string; keys: string[] }> = [
   { title: "Taproot, with no covenant", keys: ["hotcold"] },
-  { title: "Commit to the next transaction", keys: ["vault", "opvault", "pool"] },
+  { title: "Commit to the next transaction", keys: ["vault", "opvault", "pool", "ark"] },
   { title: "Sign a message, not a transaction", keys: ["delegation", "oracle"] },
   { title: "Rebind a signature", keys: ["bip448", "eltoo"] },
   { title: "Build it out of bytes", keys: ["merkle", "catonly", "recursive"] },
@@ -1760,7 +1963,7 @@ export const EXAMPLES: Record<string, ExampleEntry> = {
   opvault: {
     label: "Vault, with OP_VAULT",
     name: "op_vault",
-    blurb: "Announce a withdrawal by rewriting one leaf, and keep the way to stop it",
+    blurb: "Rewrite one leaf to withdraw, and keep a way to stop it",
     needs: "BIP-345",
     build: opvault,
   },
@@ -1770,6 +1973,13 @@ export const EXAMPLES: Record<string, ExampleEntry> = {
     blurb: "A delay to notice a theft, and a cold path to stop it",
     needs: "BIP-119",
     build: vault,
+  },
+  ark: {
+    label: "Ark",
+    name: "ark",
+    blurb: "Many balances in one coin, any owner can exit alone",
+    needs: "BIP-119",
+    build: ark,
   },
   pool: {
     label: "Congestion control",

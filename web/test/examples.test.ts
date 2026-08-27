@@ -33,6 +33,20 @@ describe.each(Object.entries(EXAMPLES))("%s", (key, ex) => {
     }
   });
 
+  // An Execute node that reports ok having run nothing has proved nothing.
+  // The way that happens is the script input being fed something whose first
+  // byte is OP_SUCCESSx: a control block starts 0xc0, so wiring one in where
+  // the leaf belongs passes the whole script without checking a thing.
+  it("runs a real script in every Execute node", () => {
+    const f = ex.build();
+    const computed = evaluate(f.nodes, f.edges, f.network, f.ruleset);
+    const idle = f.nodes
+      .filter((n) => n.data.kind === "execute")
+      .filter((r) => !(computed[r.id]?.extra as { steps?: unknown[] } | undefined)?.steps?.length)
+      .map((r) => String(r.data.name ?? r.id));
+    expect(idle, `${key}: an Execute node that runs no steps is not checking anything`).toEqual([]);
+  });
+
   it("declares every scriptPubKey at the length its own prefix promises", () => {
     // A witness program carries its length in the byte before it. Filling one
     // by repeating a byte the wrong number of times built a 66-byte script
