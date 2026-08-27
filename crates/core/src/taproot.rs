@@ -35,6 +35,29 @@ pub enum TaprootError {
 /// Leaves are arranged by the huffman constructor with equal weights, which
 /// yields the shallowest tree. A duplicate script is rejected rather than
 /// deduplicated, because its control block would be ambiguous.
+/// Depths for a balanced tree over `n` leaves, shallowest first, which is
+/// also depth-first order.
+///
+/// Deliberately a function of the leaf count alone. Building by Huffman
+/// weight instead ties the shape to the leaf hashes, because equal weights
+/// leave the heap to break ties on the node hash. BIP-345 rewrites one leaf
+/// and requires every other leaf's merkle path to survive it, so a shape
+/// that moves when a leaf's bytes change turns a correctly built vault into
+/// a trigger mismatch.
+fn balanced_depths(n: usize) -> Vec<u8> {
+    if n <= 1 {
+        return vec![0; n];
+    }
+    let mut height = 0u32;
+    while (1usize << height) < n {
+        height += 1;
+    }
+    let shallow = (1usize << height) - n;
+    (0..n)
+        .map(|i| if i < shallow { height - 1 } else { height } as u8)
+        .collect()
+}
+
 pub fn build<C: Verification>(
     secp: &Secp256k1<C>,
     network: Network,
@@ -52,8 +75,13 @@ pub fn build<C: Verification>(
             .finalize(secp, internal_key)
             .map_err(|_| TaprootError::Finalize)?
     } else {
-        TaprootBuilder::with_huffman_tree(leaves.iter().map(|s| (1u32, s.clone())))
-            .map_err(|_| TaprootError::Tree)?
+        let mut builder = TaprootBuilder::new();
+        for (script, depth) in leaves.iter().zip(balanced_depths(leaves.len())) {
+            builder = builder
+                .add_leaf(depth, script.clone())
+                .map_err(|_| TaprootError::Tree)?;
+        }
+        builder
             .finalize(secp, internal_key)
             .map_err(|_| TaprootError::Finalize)?
     };
@@ -81,6 +109,52 @@ pub fn build<C: Verification>(
 
 #[cfg(test)]
 mod tests {
+    /// BIP-345 rewrites one leaf and folds every other leaf's control block
+    /// up the tree unchanged, so the shape must not depend on leaf content.
+    /// A Huffman build with equal weights broke this for three leaves: one
+    /// arbitrary sibling in twelve moved the path and rejected a correct
+    /// vault.
+    #[test]
+    fn substituting_a_leaf_leaves_every_other_path_alone() {
+        let secp = Secp256k1::new();
+        for n in 2..=8usize {
+            for swap in 0..n {
+                let before: Vec<ScriptBuf> = (0..n)
+                    .map(|i| ScriptBuf::from(vec![0x51, 0x01, i as u8]))
+                    .collect();
+                let mut after = before.clone();
+                after[swap] = ScriptBuf::from(vec![0x51, 0x01, 0x90 | swap as u8]);
+                let b = build(&secp, Network::Signet, None, &before).unwrap();
+                let a = build(&secp, Network::Signet, None, &after).unwrap();
+                for other in (0..n).filter(|i| *i != swap) {
+                    assert_eq!(
+                        b.control_blocks[other].merkle_branch.as_slice().len(),
+                        a.control_blocks[other].merkle_branch.as_slice().len(),
+                        "n={n} swap={swap} other={other}: path length moved"
+                    );
+                }
+                assert_eq!(
+                    b.control_blocks[swap].merkle_branch.as_slice(),
+                    a.control_blocks[swap].merkle_branch.as_slice(),
+                    "n={n} swap={swap}: the rewritten leaf's own path moved"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn balanced_depths_form_a_whole_tree() {
+        for n in 1..=17usize {
+            let d = balanced_depths(n);
+            assert_eq!(d.len(), n);
+            let kraft: f64 = d.iter().map(|x| 0.5f64.powi(i32::from(*x))).sum();
+            assert!(
+                (kraft - 1.0).abs() < 1e-9,
+                "n={n} depths={d:?} kraft={kraft}"
+            );
+        }
+    }
+
     use super::*;
     use bitcoin::hashes::Hash;
 
