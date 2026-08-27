@@ -35,7 +35,11 @@ fn deployments(r: &Ruleset) -> Deployments {
 
 #[derive(Debug, Clone, Deserialize, Tsify)]
 pub struct PrevoutSpec {
-    pub value: u64,
+    /// Satoshis. Absent means the caller does not know, which BIP-443's
+    /// amount rules refuse rather than treat as zero.
+    #[serde(default)]
+    #[tsify(optional)]
+    pub value: Option<u64>,
     /// scriptPubKey hex.
     pub script_pubkey: String,
 }
@@ -146,7 +150,7 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
     for i in 0..tx.input.len() {
         match req.prevouts.get(i) {
             Some(p) => prevouts.push(TxOut {
-                value: Amount::from_sat(p.value),
+                value: Amount::from_sat(p.value.unwrap_or(0)),
                 script_pubkey: ScriptBuf::from(hex_bytes(&p.script_pubkey, "prevout script")?),
             }),
             None => prevouts.push(TxOut {
@@ -216,6 +220,7 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
             full_witness_size,
             control_block: control_block_bytes,
             taptree_root,
+            input_amount: req.prevouts.get(input_index).and_then(|p| p.value),
         },
         script,
         stack,

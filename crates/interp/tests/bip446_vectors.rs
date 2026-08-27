@@ -53,6 +53,7 @@ fn run_case(case: &Value) -> Result<bool, String> {
     let cb = ControlBlock::decode(&control).map_err(|e| e.to_string())?;
     let leaf = TapLeafHash::from_script(&script, LeafVersion::TapScript);
 
+    let input_amount = prevouts.first().map(|p| p.value.to_sat());
     let mut exec = Exec::new(
         ExecCtx::Tapscript,
         Options {
@@ -68,6 +69,7 @@ fn run_case(case: &Value) -> Result<bool, String> {
             full_witness_size: None,
             control_block: None,
             taptree_root: None,
+            input_amount,
         },
         script,
         stack,
@@ -175,6 +177,7 @@ fn run_asset(case: &Value, which: &str) -> Option<Result<bool, String>> {
     let leaf = TapLeafHash::from_script(&script, LeafVersion::TapScript);
     tx.input[index].witness = bitcoin::Witness::from_slice(&witness);
 
+    let input_amount = prevouts.first().map(|p| p.value.to_sat());
     let exec = Exec::new(
         ExecCtx::Tapscript,
         Options {
@@ -190,6 +193,7 @@ fn run_asset(case: &Value, which: &str) -> Option<Result<bool, String>> {
             full_witness_size: None,
             control_block: None,
             taptree_root: None,
+            input_amount,
         },
         script,
         stack,

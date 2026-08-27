@@ -146,6 +146,14 @@ const num = (v: Value | undefined, dflt = 0): number => {
   const n = typeof v === "number" ? v : Number(String(v).replace(/[\s,_]/g, ""));
   return Number.isFinite(n) ? n : dflt;
 };
+/** An amount, or nothing when it was never given. An amount rule cannot be
+ *  evaluated against an amount nobody supplied, and zero is not the same
+ *  answer as "unknown": zero would satisfy it. */
+const sats = (v: Value | undefined): number | undefined => {
+  if (v == null || v === "") return undefined;
+  const n = typeof v === "number" ? v : Number(String(v).replace(/[\s,_]/g, ""));
+  return Number.isFinite(n) ? n : undefined;
+};
 const arr = (v: Value | undefined): string[] => (Array.isArray(v) ? v : v == null || v === "" ? [] : [String(v)]);
 
 /** Typed field unless something is wired into the port. */
@@ -342,7 +350,11 @@ const transaction: NodeKind = {
   },
   outputs: (f) => {
     const ports: Port[] = [P("hex", "hex", "tx"), P("txid", "txid", "hash")];
-    for (let j = 0; j < count(f, "nOut", 1); j++) ports.push(P(`outpoint${j}`, `outpoint[${j}]`, "outpoint"));
+    for (let j = 0; j < count(f, "nOut", 1); j++) {
+      ports.push(P(`outpoint${j}`, `outpoint[${j}]`, "outpoint"));
+      ports.push(P(`outvalue${j}`, `out[${j}] sat`, "number"));
+      ports.push(P(`outspk${j}`, `out[${j}] spk`, "spk"));
+    }
     return ports;
   },
   compute: (f, w) => {
@@ -364,6 +376,8 @@ const transaction: NodeKind = {
       });
       const out: Record<string, Value> = { hex: v.hex, txid: v.txid };
       v.outpoints.forEach((o, j) => (out[`outpoint${j}`] = o));
+      v.output_values.forEach((n, j) => (out[`outvalue${j}`] = String(n)));
+      v.output_scripts.forEach((h, j) => (out[`outspk${j}`] = h));
       const parts = [`${v.vsize} vB`];
       if (v.fee != null) parts.push(`fee ${v.fee}`);
       parts.push(v.complete ? "complete" : "incomplete");
@@ -424,7 +438,7 @@ const execute: NodeKind = {
   label: "Execute",
   category: "Covenants",
   description: "Runs a tapscript against a transaction under the ruleset and reports every step of the stack.",
-  defaults: () => ({ name: "execute", input_index: 0, prevout_value: 0 }),
+  defaults: () => ({ name: "execute", input_index: 0 }),
   inputs: () => [
     P("script", "script", "script"),
     P("witness", "witness", "witness"),
@@ -450,7 +464,7 @@ const execute: NodeKind = {
         stack,
         tx: str(w.tx) || undefined,
         input_index: num(get(f, w, "input_index")),
-        prevouts: spk ? [{ value: num(get(f, w, "prevout_value")), script_pubkey: spk }] : [],
+        prevouts: spk ? [{ value: sats(get(f, w, "prevout_value")), script_pubkey: spk }] : [],
         control_block: control || undefined,
         ruleset: ctx.ruleset,
       });

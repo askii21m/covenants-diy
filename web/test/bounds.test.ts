@@ -32,6 +32,7 @@ const ctx = {
     internalkey: true,
     paircommit: true,
     txhash: true,
+    ccv: true,
   },
 };
 let fixture: { leaf: string; spk: string; control: string; template: string; tx: string };

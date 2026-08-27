@@ -48,6 +48,10 @@ pub enum ExecError {
     CcvIndexOutOfBounds,
     /// BIP-443: the target's scriptPubKey is not the contract the script names.
     CcvMismatch,
+    /// BIP-443: an amount rule was reached without knowing what the input is
+    /// worth, so the rule cannot be evaluated. Passing it would report a
+    /// covenant as enforced when nothing was checked.
+    CcvAmountUnknown,
     /// BIP-443: the amount rules for the target output were broken, either by
     /// two incompatible checks on it or by an output that takes more than the
     /// input has left.

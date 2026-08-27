@@ -67,6 +67,7 @@ fn run_tapscript_with(
     internal_key: Option<XOnlyPublicKey>,
 ) -> Result<ExecutionResult, Error> {
     let leaf = TapLeafHash::from_script(&script, LeafVersion::TapScript);
+    let input_amount = prevouts.first().map(|p| p.value.to_sat());
     let mut exec = Exec::new(
         ExecCtx::Tapscript,
         Options {
@@ -82,6 +83,7 @@ fn run_tapscript_with(
             full_witness_size: None,
             control_block: None,
             taptree_root: None,
+            input_amount,
         },
         script,
         witness,
@@ -966,4 +968,76 @@ fn an_active_ccv_does_not_pass_the_script_by_itself() {
         "an active OP_CHECKCONTRACTVERIFY passed a script ending in OP_0, so the \
          pre-scan treated it as OP_SUCCESSx instead of executing it"
     );
+}
+
+/// An amount rule cannot be evaluated against an amount nobody supplied.
+/// Reading the absence as zero would satisfy it, and report a covenant as
+/// enforced when nothing had been checked.
+#[test]
+fn ccv_refuses_an_amount_rule_without_an_amount() {
+    let (_, _, xonly) = keypair();
+    for mode in [0i64, 2] {
+        let (mut tx, prevouts) = fixture(1, 1);
+        tx.output[0].script_pubkey = ccv_spk(&xonly, b"v");
+        tx.output[0].value = Amount::from_sat(1);
+        let script = ccv_script(b"v", 0, &xonly.serialize(), &[], mode);
+
+        let leaf = TapLeafHash::from_script(&script, LeafVersion::TapScript);
+        let mut exec = Exec::new(
+            ExecCtx::Tapscript,
+            Options::default(),
+            TxTemplate {
+                tx,
+                prevouts,
+                input_idx: 0,
+                taproot_annex_scriptleaf: Some((leaf, None)),
+                internal_key: None,
+                full_witness_size: None,
+                control_block: None,
+                taptree_root: None,
+                input_amount: None,
+            },
+            script,
+            vec![],
+        )
+        .unwrap();
+        while exec.exec_next().is_ok() {}
+        let res = exec.result().unwrap().clone();
+        assert_eq!(
+            res.error,
+            Some(ExecError::CcvAmountUnknown),
+            "mode {mode} passed without an amount"
+        );
+    }
+}
+
+/// The modes that do not read the amount still run without one.
+#[test]
+fn ccv_without_an_amount_still_checks_the_program() {
+    let (_, _, xonly) = keypair();
+    let (mut tx, prevouts) = fixture(1, 1);
+    tx.output[0].script_pubkey = ccv_spk(&xonly, b"v");
+    let script = ccv_script(b"v", 0, &xonly.serialize(), &[], 1);
+    let leaf = TapLeafHash::from_script(&script, LeafVersion::TapScript);
+    let mut exec = Exec::new(
+        ExecCtx::Tapscript,
+        Options::default(),
+        TxTemplate {
+            tx,
+            prevouts,
+            input_idx: 0,
+            taproot_annex_scriptleaf: Some((leaf, None)),
+            internal_key: None,
+            full_witness_size: None,
+            control_block: None,
+            taptree_root: None,
+            input_amount: None,
+        },
+        script,
+        vec![],
+    )
+    .unwrap();
+    while exec.exec_next().is_ok() {}
+    let res = exec.result().unwrap().clone();
+    assert!(res.success, "{:?}", res.error);
 }

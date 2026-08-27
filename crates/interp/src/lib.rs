@@ -161,6 +161,11 @@ pub struct TxTemplate {
     /// Merkle root of the current input's tapscript tree, which BIP-443
     /// substitutes when a taptree of -1 is given.
     pub taptree_root: Option<[u8; 32]>,
+    /// Value of the coin this input spends, when the caller knows it.
+    /// Distinct from `prevouts`, which a caller may fill with placeholders
+    /// to satisfy hashing: BIP-443's amount rules are only meaningful over
+    /// a real amount, and a placeholder zero would satisfy them vacuously.
+    pub input_amount: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -246,7 +251,7 @@ pub struct Exec {
     ccv_output_min_amount: Vec<u64>,
     ccv_output_checked_default: Vec<bool>,
     ccv_output_checked_deduct: Vec<bool>,
-    ccv_residual_input_amount: u64,
+    ccv_residual_input_amount: Option<u64>,
     // Set when an opcode succeeds the input outright rather than failing or
     // continuing, which BIP-443 does for a mode it does not define.
     succeed_now: bool,
@@ -342,12 +347,9 @@ impl Exec {
         let start_validation_weight = VALIDATION_WEIGHT_OFFSET + witness_size as i64;
 
         let n_outputs = tx.tx.output.len();
-        // The residual starts at the whole amount this input is spending.
-        let residual = tx
-            .prevouts
-            .get(tx.input_idx)
-            .map(|p| p.value.to_sat())
-            .unwrap_or(0);
+        // The residual starts at the whole amount this input is spending,
+        // and stays unknown when the caller could not say what that is.
+        let residual = tx.input_amount;
 
         let mut ret = Exec {
             ctx,
@@ -1327,19 +1329,25 @@ impl Exec {
                     let out_amount = self.tx.tx.output[i].value.to_sat();
                     match mode {
                         CcvMode::CheckOutput => {
+                            let residual = self
+                                .ccv_residual_input_amount
+                                .ok_or(ExecError::CcvAmountUnknown)?;
                             if self.ccv_output_checked_deduct[i] {
                                 return Err(ExecError::CcvAmount);
                             }
-                            self.ccv_output_min_amount[i] = self.ccv_output_min_amount[i]
-                                .saturating_add(self.ccv_residual_input_amount);
-                            self.ccv_residual_input_amount = 0;
+                            self.ccv_output_min_amount[i] =
+                                self.ccv_output_min_amount[i].saturating_add(residual);
+                            self.ccv_residual_input_amount = Some(0);
                             if out_amount < self.ccv_output_min_amount[i] {
                                 return Err(ExecError::CcvAmount);
                             }
                             self.ccv_output_checked_default[i] = true;
                         }
                         CcvMode::CheckOutputDeductAmount => {
-                            if self.ccv_residual_input_amount < out_amount {
+                            let residual = self
+                                .ccv_residual_input_amount
+                                .ok_or(ExecError::CcvAmountUnknown)?;
+                            if residual < out_amount {
                                 return Err(ExecError::CcvAmount);
                             }
                             if self.ccv_output_checked_default[i]
@@ -1347,7 +1355,7 @@ impl Exec {
                             {
                                 return Err(ExecError::CcvAmount);
                             }
-                            self.ccv_residual_input_amount -= out_amount;
+                            self.ccv_residual_input_amount = Some(residual - out_amount);
                             self.ccv_output_checked_deduct[i] = true;
                         }
                         CcvMode::CheckOutputIgnoreAmount | CcvMode::CheckInput => {}

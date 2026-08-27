@@ -180,6 +180,11 @@ pub struct TransactionView {
     pub wtxid: String,
     /// `"txid:vout"` per output, for wiring into a child's prevout.
     pub outpoints: Vec<String>,
+    /// Satoshis per output, so a spender takes the amount from the coin it
+    /// spends rather than being asked for it again.
+    pub output_values: Vec<u64>,
+    /// scriptPubKey hex per output, for the same reason.
+    pub output_scripts: Vec<String>,
     pub weight: usize,
     pub vsize: usize,
     /// Inputs minus outputs, when every prevout value is known.
@@ -234,6 +239,12 @@ pub fn realize(req: Ts<RealizeRequest>) -> Result<Ts<TransactionView>, JsError> 
         wtxid: tx.compute_wtxid().to_string(),
         outpoints: (0..tx.output.len())
             .map(|v| format!("{txid}:{v}"))
+            .collect(),
+        output_values: tx.output.iter().map(|o| o.value.to_sat()).collect(),
+        output_scripts: tx
+            .output
+            .iter()
+            .map(|o| o.script_pubkey.as_bytes().to_lower_hex_string())
             .collect(),
         weight: tx.weight().to_wu() as usize,
         vsize: tx.vsize(),
@@ -659,7 +670,10 @@ pub fn sighash(req: Ts<SighashRequest>) -> Result<Ts<SighashView>, JsError> {
         .iter()
         .map(|p| {
             Ok(TxOut {
-                value: Amount::from_sat(p.value),
+                // A sighash commits to the amount, so an absent one yields a
+                // digest that no real signature matches. That fails loudly,
+                // unlike an amount rule, which is why this one may default.
+                value: Amount::from_sat(p.value.unwrap_or(0)),
                 script_pubkey: ScriptBuf::from(hex(&p.script_pubkey, "prevout script")?),
             })
         })
