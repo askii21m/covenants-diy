@@ -101,6 +101,43 @@ fn run_tapscript(
     run_tapscript_with(script, witness, tx, prevouts, Deployments::default(), None)
 }
 
+/// Every other helper pins taptree_root to None, which leaves BIP-443's
+/// whole taptree branch unreachable from a test.
+fn run_with_taptree(
+    script: ScriptBuf,
+    tx: Transaction,
+    prevouts: Vec<TxOut>,
+    internal_key: Option<XOnlyPublicKey>,
+    taptree_root: Option<[u8; 32]>,
+) -> Result<ExecutionResult, Error> {
+    let leaf = TapLeafHash::from_script(&script, LeafVersion::TapScript);
+    let input_amount = prevouts.first().map(|p| p.value.to_sat());
+    let mut exec = Exec::new(
+        ExecCtx::Tapscript,
+        Options::default(),
+        TxTemplate {
+            tx,
+            prevouts,
+            input_idx: 0,
+            taproot_annex_scriptleaf: Some((leaf, None)),
+            internal_key,
+            full_witness_size: None,
+            control_block: None,
+            taptree_root,
+            input_amount,
+        },
+        script,
+        vec![],
+    )?;
+    while exec.exec_next().is_ok() {}
+    Ok(exec.result().unwrap().clone())
+}
+
+/// The contract scriptPubKey for a given tree, so a test can name one.
+fn ccv_spk_tree(naked: &XOnlyPublicKey, data: &[u8], tree: Option<[u8; 32]>) -> ScriptBuf {
+    covenants_core::ccv::expected_script_pubkey(naked, data, tree).unwrap()
+}
+
 fn keypair() -> (Secp256k1<bitcoin::secp256k1::All>, Keypair, XOnlyPublicKey) {
     let secp = Secp256k1::new();
     let kp = Keypair::from_seckey_slice(&secp, &[7u8; 32]).unwrap();
@@ -787,22 +824,37 @@ fn ccv_spk(naked: &XOnlyPublicKey, data: &[u8]) -> ScriptBuf {
 }
 
 /// <data> <index> <pk> <taptree> <mode>, bottom to top.
-fn ccv_script(data: &[u8], index: i64, pk: &[u8], taptree: &[u8], mode: i64) -> ScriptBuf {
+/// The five pushes and the opcode, with no trailing truth value, so calls
+/// can be concatenated. A parameter of `[0x81]` means the number -1, which
+/// has to go on as OP_1NEGATE: pushed as a byte it is a non-minimal push and
+/// the script is rejected before it runs.
+fn ccv_ops(data: &[u8], index: i64, pk: &[u8], taptree: &[u8], mode: i64) -> ScriptBuf {
     use bitcoin::script::PushBytesBuf;
-    let push = |b: &mut Builder, v: &[u8]| {
+    let put = |b: Builder, v: &[u8]| {
+        if v == [0x81] {
+            return b.push_int(-1);
+        }
         let mut p = PushBytesBuf::new();
         p.extend_from_slice(v).unwrap();
-        std::mem::replace(b, Builder::new()).push_slice(p)
+        b.push_slice(p)
     };
     let mut b = Builder::new();
-    b = push(&mut b, data);
+    b = put(b, data);
     b = b.push_int(index);
-    b = push(&mut b, pk);
-    b = push(&mut b, taptree);
-    b.push_int(mode)
-        .push_opcode(OP_CCV)
-        .push_opcode(OP_PUSHNUM_1)
-        .into_script()
+    b = put(b, pk);
+    b = put(b, taptree);
+    b.push_int(mode).push_opcode(OP_CCV).into_script()
+}
+
+fn ccv_script(data: &[u8], index: i64, pk: &[u8], taptree: &[u8], mode: i64) -> ScriptBuf {
+    let mut v = ccv_ops(data, index, pk, taptree, mode).to_bytes();
+    v.extend(
+        Builder::new()
+            .push_opcode(OP_PUSHNUM_1)
+            .into_script()
+            .to_bytes(),
+    );
+    ScriptBuf::from(v)
 }
 
 /// The output the script names really is the contract, so the check passes.
@@ -1040,4 +1092,179 @@ fn ccv_without_an_amount_still_checks_the_program() {
     while exec.exec_next().is_ok() {}
     let res = exec.result().unwrap().clone();
     assert!(res.success, "{:?}", res.error);
+}
+
+/// A taptree given as 32 explicit bytes is taptweaked into the contract.
+/// Nothing reached this branch before, which is how a wrong leaf version in
+/// the caller that supplies the root went unnoticed.
+#[test]
+fn ccv_takes_an_explicit_taptree() {
+    let (_, _, xonly) = keypair();
+    let root = [0x5cu8; 32];
+    let (mut tx, prevouts) = fixture(1, 1);
+    tx.output[0].script_pubkey = ccv_spk_tree(&xonly, b"v", Some(root));
+    let script = ccv_script(b"v", 0, &xonly.serialize(), &root, 1);
+    let res = run_with_taptree(script, tx, prevouts, None, None).unwrap();
+    assert!(res.success, "{:?}", res.error);
+}
+
+/// The same contract without the tree is a different key, so a script that
+/// forgets the taptweak must not satisfy it.
+#[test]
+fn ccv_taptree_changes_the_contract() {
+    let (_, _, xonly) = keypair();
+    let root = [0x5cu8; 32];
+    let (mut tx, prevouts) = fixture(1, 1);
+    tx.output[0].script_pubkey = ccv_spk_tree(&xonly, b"v", Some(root));
+    let script = ccv_script(b"v", 0, &xonly.serialize(), &[], 1);
+    let res = run_with_taptree(script, tx, prevouts, None, None).unwrap();
+    assert_eq!(res.error, Some(ExecError::CcvMismatch));
+}
+
+/// A taptree of -1 means this input's own tree, and needs one to be known.
+#[test]
+fn ccv_taptree_minus_one_uses_the_inputs_own_tree() {
+    let (_, _, xonly) = keypair();
+    let root = [0xa7u8; 32];
+    let (mut tx, prevouts) = fixture(1, 1);
+    tx.output[0].script_pubkey = ccv_spk_tree(&xonly, b"v", Some(root));
+    let script = ccv_script(b"v", 0, &xonly.serialize(), &[0x81], 1);
+
+    let res = run_with_taptree(
+        script.clone(),
+        tx.clone(),
+        prevouts.clone(),
+        None,
+        Some(root),
+    )
+    .unwrap();
+    assert!(res.success, "{:?}", res.error);
+
+    let res = run_with_taptree(script, tx, prevouts, None, None).unwrap();
+    assert_eq!(res.error, Some(ExecError::CcvTaptreeMissing));
+}
+
+/// A taptree that is neither empty, nor 32 bytes, nor -1 is not a shape the
+/// opcode accepts.
+#[test]
+fn ccv_rejects_a_taptree_of_the_wrong_length() {
+    let (_, _, xonly) = keypair();
+    let (tx, prevouts) = fixture(1, 1);
+    let script = ccv_script(b"v", 0, &xonly.serialize(), &[0x11; 31], 1);
+    let res = run_with_taptree(script, tx, prevouts, None, Some([0u8; 32])).unwrap();
+    assert_eq!(res.error, Some(ExecError::CcvParameter));
+}
+
+/// BIP-443 wants a minimally encoded -1. A non-minimal one is "any other
+/// value", which the opcode has to reject: accepting it passes a script a
+/// conforming node rejects.
+#[test]
+fn ccv_rejects_a_non_minimal_minus_one() {
+    let (_, _, xonly) = keypair();
+    let root = [0xa7u8; 32];
+    let (mut tx, prevouts) = fixture(1, 1);
+    tx.output[0].script_pubkey = ccv_spk_tree(&xonly, b"v", Some(root));
+    // 0x0180 decodes as -1, but not minimally.
+    let script = ccv_script(b"v", 0, &xonly.serialize(), &[0x01, 0x80], 1);
+    let res = run_with_taptree(script, tx, prevouts, None, Some(root)).unwrap();
+    assert_eq!(res.error, Some(ExecError::CcvParameter));
+}
+
+/// The same, for the naked key: four spellings of -1 must not all reach the
+/// input's internal key.
+#[test]
+fn ccv_rejects_a_non_minimal_minus_one_key() {
+    let (_, _, xonly) = keypair();
+    let (mut tx, prevouts) = fixture(1, 1);
+    tx.output[0].script_pubkey = ccv_spk(&xonly, b"v");
+    let script = ccv_script(b"v", 0, &[0x01, 0x80], &[], 1);
+    let res = run_with_taptree(script, tx, prevouts, Some(xonly), None).unwrap();
+    assert_eq!(res.error, Some(ExecError::CcvParameter));
+}
+
+/// pk of -1 is the current input's internal key, and needs one to be known.
+#[test]
+fn ccv_key_minus_one_is_the_internal_key() {
+    let (_, _, xonly) = keypair();
+    let (mut tx, prevouts) = fixture(1, 1);
+    tx.output[0].script_pubkey = ccv_spk(&xonly, b"v");
+    let script = ccv_script(b"v", 0, &[0x81], &[], 1);
+
+    let res = run_with_taptree(
+        script.clone(),
+        tx.clone(),
+        prevouts.clone(),
+        Some(xonly),
+        None,
+    )
+    .unwrap();
+    assert!(res.success, "{:?}", res.error);
+
+    let res = run_with_taptree(script, tx, prevouts, None, None).unwrap();
+    assert_eq!(res.error, Some(ExecError::CcvInternalKeyMissing));
+}
+
+/// Mode 2 draining across two outputs: the residual falls by each output's
+/// amount in turn. Only its failing path was covered before, so nothing
+/// ever ran the subtraction.
+#[test]
+fn ccv_deduct_mode_drains_the_residual() {
+    let (_, _, xonly) = keypair();
+    let (mut tx, prevouts) = fixture(1, 2);
+    tx.output[0].script_pubkey = ccv_spk(&xonly, b"v");
+    tx.output[1].script_pubkey = ccv_spk(&xonly, b"v");
+    tx.output[0].value = Amount::from_sat(30_000);
+    tx.output[1].value = Amount::from_sat(70_000);
+
+    let two = |a: i64, b: i64| {
+        let mut sc = Vec::new();
+        for i in [a, b] {
+            sc.extend(ccv_ops(b"v", i, &xonly.serialize(), &[], 2).to_bytes());
+        }
+        sc.extend(
+            Builder::new()
+                .push_opcode(OP_PUSHNUM_1)
+                .into_script()
+                .to_bytes(),
+        );
+        ScriptBuf::from(sc)
+    };
+    // 100_000 in, 30_000 then 70_000 out: exactly drained.
+    let res = run_tapscript(two(0, 1), vec![], tx.clone(), prevouts.clone()).unwrap();
+    assert!(res.success, "{:?}", res.error);
+
+    // One satoshi more than the input holds.
+    let mut over = tx;
+    over.output[1].value = Amount::from_sat(70_001);
+    let res = run_tapscript(two(0, 1), vec![], over, prevouts).unwrap();
+    assert_eq!(res.error, Some(ExecError::CcvAmount));
+}
+
+/// The spec forbids mixing the two amount semantics on one output, in
+/// either order, and forbids deducting from it twice. The guard inside
+/// CheckOutput was never executed by any test.
+#[test]
+fn ccv_amount_modes_do_not_mix_on_one_output() {
+    let (_, _, xonly) = keypair();
+    for (first, second) in [(2i64, 0i64), (0, 2), (2, 2)] {
+        let (mut tx, prevouts) = fixture(1, 1);
+        tx.output[0].script_pubkey = ccv_spk(&xonly, b"v");
+        tx.output[0].value = Amount::from_sat(100_000);
+        let mut sc = Vec::new();
+        for m in [first, second] {
+            sc.extend(ccv_ops(b"v", 0, &xonly.serialize(), &[], m).to_bytes());
+        }
+        sc.extend(
+            Builder::new()
+                .push_opcode(OP_PUSHNUM_1)
+                .into_script()
+                .to_bytes(),
+        );
+        let res = run_tapscript(ScriptBuf::from(sc), vec![], tx, prevouts).unwrap();
+        assert_eq!(
+            res.error,
+            Some(ExecError::CcvAmount),
+            "modes {first} then {second} on one output were allowed"
+        );
+    }
 }

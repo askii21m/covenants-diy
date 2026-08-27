@@ -20,6 +20,10 @@ const ALL = {
 };
 const OFF = { ...ALL, ccv: false };
 
+/** The contract key for the NUMS point carrying the two bytes 0x0102, from the
+ *  model the Rust suite checks its vectors against. */
+const NUMS_DATA = "a108a4d3b3527695cb108074d8f5d20e091aaf76ee242d9d0f081f1cd0d3d74e";
+
 function run(source: string, ruleset: typeof ALL) {
   const leaf = wasm.assemble({ source, bindings: {}, ruleset: ALL });
   const tr = wasm.taproot_output({ network: "signet", leaves: [leaf.script!] });
@@ -54,10 +58,46 @@ describe("OP_CHECKCONTRACTVERIFY", () => {
   // The guard OP_TXHASH shipped without: BIP-342 scans for OP_SUCCESSx
   // before executing, so an active deployment has to be carved out.
   it("executes rather than passing the script outright", () => {
-    // <> <0> <> <> <1> OP_CCV OP_0: the contract check fails on a mismatch,
-    // and either way the script must not pass on the trailing OP_0.
-    const src = "<> OP_0 <> <> OP_1 OP_CHECKCONTRACTVERIFY OP_0";
+    const src = "<0102> OP_0 <> <> OP_1 OP_CHECKCONTRACTVERIFY OP_0";
     expect(run(src, ALL).success).toBe(false);
     expect(run(src, OFF).success).toBe(true);
+  });
+
+  it("passes when the output really is the contract, and says why when it is not", () => {
+    // NUMS key, data 0x01, no taptree: the contract the script names.
+    const contract = "5120" + NUMS_DATA;
+    const leaf = wasm.assemble({
+      source: "<0102> OP_0 <> <> OP_1 OP_CHECKCONTRACTVERIFY OP_1",
+      bindings: {},
+      ruleset: ALL,
+    });
+    const tr = wasm.taproot_output({ network: "signet", leaves: [leaf.script!] });
+    const tx = (spk: string) =>
+      wasm.template({
+        version: 2,
+        locktime: 0,
+        inputs: [{ sequence: 4294967293 }],
+        outputs: [{ value: 90000, script_pubkey: spk }],
+      }).template;
+    const go = (spk: string) =>
+      wasm.execute({
+        script: leaf.script!,
+        stack: [],
+        ruleset: ALL,
+        input_index: 0,
+        tx: tx(spk),
+        prevouts: [{ value: 100000, script_pubkey: tr.script_pubkey }],
+        control_block: tr.control_blocks[0],
+      });
+
+    const ok = go(contract);
+    expect(ok.error, `expected the contract to match: ${ok.error}`).toBeFalsy();
+    expect(ok.success).toBe(true);
+    expect(ok.final_stack).toHaveLength(1);
+
+    // One byte different is a different contract, and it says so.
+    const wrong = go(contract.slice(0, -2) + (contract.endsWith("ff") ? "ee" : "ff"));
+    expect(wrong.success).toBe(false);
+    expect(wrong.steps[wrong.steps.length - 1].error).toContain("CcvMismatch");
   });
 });
