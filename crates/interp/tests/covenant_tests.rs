@@ -82,6 +82,7 @@ fn run_tapscript_with(
             internal_key,
             full_witness_size: None,
             control_block: None,
+            ccv_state: None,
             taptree_root: None,
             input_amount,
         },
@@ -123,6 +124,7 @@ fn run_with_taptree(
             internal_key,
             full_witness_size: None,
             control_block: None,
+            ccv_state: None,
             taptree_root,
             input_amount,
         },
@@ -1046,6 +1048,7 @@ fn ccv_refuses_an_amount_rule_without_an_amount() {
                 internal_key: None,
                 full_witness_size: None,
                 control_block: None,
+                ccv_state: None,
                 taptree_root: None,
                 input_amount: None,
             },
@@ -1082,6 +1085,7 @@ fn ccv_without_an_amount_still_checks_the_program() {
             internal_key: None,
             full_witness_size: None,
             control_block: None,
+            ccv_state: None,
             taptree_root: None,
             input_amount: None,
         },
@@ -1267,4 +1271,96 @@ fn ccv_amount_modes_do_not_mix_on_one_output() {
             "modes {first} then {second} on one output were allowed"
         );
     }
+}
+
+/// The scenario a single-input run gets wrong: two inputs each carrying
+/// their whole amount into the same output. A node sums them, so an output
+/// worth one input's amount is short. Threading the state between the runs
+/// is what makes this tool say the same thing.
+#[test]
+fn ccv_amounts_accumulate_across_inputs_when_threaded() {
+    let (_, _, xonly) = keypair();
+    let (mut tx, prevouts) = fixture(2, 1);
+    tx.output[0].script_pubkey = ccv_spk(&xonly, b"v");
+    // One input's worth, while two inputs each demand it carries theirs.
+    tx.output[0].value = Amount::from_sat(100_000);
+    let script = ccv_script(b"v", 0, &xonly.serialize(), &[], 0);
+
+    let run = |idx: usize, carry: Option<covenants_interp::CcvTxState>| {
+        let leaf = TapLeafHash::from_script(&script, LeafVersion::TapScript);
+        let mut exec = Exec::new(
+            ExecCtx::Tapscript,
+            Options::default(),
+            TxTemplate {
+                tx: tx.clone(),
+                prevouts: prevouts.clone(),
+                input_idx: idx,
+                taproot_annex_scriptleaf: Some((leaf, None)),
+                internal_key: None,
+                full_witness_size: None,
+                control_block: None,
+                ccv_state: carry,
+                taptree_root: None,
+                input_amount: Some(prevouts[idx].value.to_sat()),
+            },
+            script.clone(),
+            vec![],
+        )
+        .unwrap();
+        while exec.exec_next().is_ok() {}
+        (exec.result().unwrap().clone(), exec.ccv_state())
+    };
+
+    // Input 0 alone is satisfied: the output does carry its 100_000.
+    let (first, carry) = run(0, None);
+    assert!(first.success, "{:?}", first.error);
+    assert_eq!(carry.output_min_amount[0], 100_000);
+
+    // Input 1 judged on its own agrees, which is the wrong answer.
+    let (alone, _) = run(1, None);
+    assert!(alone.success, "{:?}", alone.error);
+
+    // Handed what input 0 left, it needs 200_000 and the output has half.
+    let (threaded, end) = run(1, Some(carry));
+    assert_eq!(threaded.error, Some(ExecError::CcvAmount));
+    assert_eq!(end.output_min_amount[0], 200_000);
+}
+
+/// The budget cannot be reported as a figure while an opcode with no
+/// settled weight has run, so the count that says so has to be there.
+#[test]
+fn ccv_is_counted_as_unpriced() {
+    let (_, _, xonly) = keypair();
+    let (mut tx, prevouts) = fixture(1, 1);
+    tx.output[0].script_pubkey = ccv_spk(&xonly, b"v");
+    let leaf_script = ccv_script(b"v", 0, &xonly.serialize(), &[], 1);
+    let leaf = TapLeafHash::from_script(&leaf_script, LeafVersion::TapScript);
+    let input_amount = prevouts.first().map(|p| p.value.to_sat());
+    let mut exec = Exec::new(
+        ExecCtx::Tapscript,
+        Options::default(),
+        TxTemplate {
+            tx,
+            prevouts,
+            input_idx: 0,
+            taproot_annex_scriptleaf: Some((leaf, None)),
+            internal_key: None,
+            full_witness_size: None,
+            control_block: None,
+            ccv_state: None,
+            taptree_root: None,
+            input_amount,
+        },
+        leaf_script,
+        vec![],
+    )
+    .unwrap();
+    while exec.exec_next().is_ok() {}
+    assert!(exec.result().unwrap().success);
+    assert_eq!(exec.stats().unpriced_ops, 1);
+    // And the weight really is untouched, which is why the count matters.
+    assert_eq!(
+        exec.stats().validation_weight,
+        exec.stats().start_validation_weight
+    );
 }

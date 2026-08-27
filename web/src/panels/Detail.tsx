@@ -252,8 +252,9 @@ function Trace({ trace }: { trace?: DebugTrace }) {
         <span className={trace.success ? "ok" : "err"}>
           {trace.success ? "accepted" : `rejected${trace.error ? `: ${trace.error}` : ""}`}
         </span>
-        <span>
+        <span title={trace.unpriced_ops > 0 ? "an opcode ran whose weight no BIP has settled" : undefined}>
           budget {trace.validation_weight_start} → {trace.validation_weight_remaining}
+          {trace.unpriced_ops > 0 ? " at least" : ""}
         </span>
         <span>final stack [{trace.final_stack.map((x) => short(x, 10)).join(", ")}]</span>
       </div>

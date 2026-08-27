@@ -13,7 +13,7 @@ use bitcoin::{
     absolute, transaction, Amount, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Witness,
 };
 use covenants_core::enforce::Ruleset;
-use covenants_interp::{Deployments, Exec, ExecCtx, Options, TxTemplate};
+use covenants_interp::{CcvTxState, Deployments, Exec, ExecCtx, Options, TxTemplate};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -76,6 +76,45 @@ pub struct DebugRequest {
     pub control_block: Option<String>,
     #[serde(default)]
     pub ruleset: Ruleset,
+    /// What earlier inputs of this transaction already accumulated under
+    /// BIP-443's amount rules, as returned by a previous run. Absent means
+    /// this input is judged on its own, which is only the whole story for a
+    /// transaction with one input.
+    #[serde(default)]
+    #[tsify(optional)]
+    pub ccv_state: Option<CcvStateSpec>,
+}
+
+/// BIP-443's transaction-wide amount state, in and out, so a caller running
+/// one input at a time can thread it and get what a node would decide.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, Tsify)]
+pub struct CcvStateSpec {
+    #[serde(default)]
+    pub output_min_amount: Vec<u64>,
+    #[serde(default)]
+    pub output_checked_default: Vec<bool>,
+    #[serde(default)]
+    pub output_checked_deduct: Vec<bool>,
+}
+
+impl From<CcvStateSpec> for CcvTxState {
+    fn from(s: CcvStateSpec) -> Self {
+        CcvTxState {
+            output_min_amount: s.output_min_amount,
+            output_checked_default: s.output_checked_default,
+            output_checked_deduct: s.output_checked_deduct,
+        }
+    }
+}
+
+impl From<CcvTxState> for CcvStateSpec {
+    fn from(s: CcvTxState) -> Self {
+        CcvStateSpec {
+            output_min_amount: s.output_min_amount,
+            output_checked_default: s.output_checked_default,
+            output_checked_deduct: s.output_checked_deduct,
+        }
+    }
 }
 
 #[derive(Serialize, Tsify)]
@@ -103,6 +142,12 @@ pub struct DebugTrace {
     pub validation_weight_remaining: i64,
     /// The script as covenant-aware assembly.
     pub asm: String,
+    /// Opcodes run whose weight no BIP has settled. Above zero, the two
+    /// budget figures are a lower bound on what a node will spend rather
+    /// than the figure it would arrive at.
+    pub unpriced_ops: usize,
+    /// BIP-443 amount state after this input, to hand to the next one.
+    pub ccv_state: CcvStateSpec,
 }
 
 fn hex_bytes(s: &str, what: &str) -> Result<Vec<u8>, String> {
@@ -223,6 +268,7 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
             internal_key,
             full_witness_size,
             control_block: control_block_bytes,
+            ccv_state: req.ccv_state.clone().map(Into::into),
             taptree_root,
             input_amount: req.prevouts.get(input_index).and_then(|p| p.value),
         },
@@ -297,6 +343,8 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
                     op_count: exec.stats().opcode_count,
                     validation_weight_start: start_weight,
                     validation_weight_remaining: exec.stats().validation_weight,
+                    unpriced_ops: exec.stats().unpriced_ops,
+                    ccv_state: exec.ccv_state().into(),
                     asm: rendered,
                 });
             }

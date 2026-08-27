@@ -12,7 +12,18 @@ export type Value = string | number | string[] | null;
  *  freely and differs only in colour; outpoints, witnesses, numbers and
  *  addresses are distinct shapes and refuse each other. */
 export type PortType =
-  "hash" | "script" | "tx" | "spk" | "hex" | "outpoint" | "witness" | "number" | "text" | "address" | "any";
+  | "hash"
+  | "script"
+  | "tx"
+  | "spk"
+  | "hex"
+  | "outpoint"
+  | "witness"
+  | "number"
+  | "text"
+  | "address"
+  | "ccvstate"
+  | "any";
 
 const HEXISH: ReadonlySet<PortType> = new Set(["hash", "script", "tx", "spk", "hex"]);
 
@@ -447,8 +458,13 @@ const execute: NodeKind = {
     N("prevout_value", "prevout sat", 0, MAX_MONEY),
     P("prevout_spk", "prevout spk", "spk"),
     P("control", "control block", "hex"),
+    P("ccv_in", "ccv carry in", "ccvstate"),
   ],
-  outputs: () => [P("ok", "result", "number"), P("stack", "final stack", "witness")],
+  outputs: () => [
+    P("ok", "result", "number"),
+    P("stack", "final stack", "witness"),
+    P("ccv_out", "ccv carry out", "ccvstate"),
+  ],
   compute: (f, w, ctx) => {
     const script = str(w.script);
     if (!script) return fail("script is not wired", { ok: null, stack: null });
@@ -458,6 +474,7 @@ const execute: NodeKind = {
     const control =
       str(w.control) || (full.length >= 2 && full[full.length - 2] === script ? full[full.length - 1] : "");
     const spk = str(w.prevout_spk);
+    const carry = str(w.ccv_in);
     try {
       const v = wasm.execute({
         script,
@@ -467,11 +484,23 @@ const execute: NodeKind = {
         prevouts: spk ? [{ value: sats(get(f, w, "prevout_value")), script_pubkey: spk }] : [],
         control_block: control || undefined,
         ruleset: ctx.ruleset,
+        // BIP-443 accumulates its amount rules across every input of the
+        // transaction, so running one input at a time only agrees with a
+        // node when what the last one left is carried into the next.
+        ccv_state: carry ? JSON.parse(carry) : undefined,
       });
+      // A budget is only a figure while every opcode that ran has a settled
+      // weight. Reporting one that quietly assumed an unpriced opcode is
+      // free would be this tool inventing consensus.
+      const note = v.unpriced_ops > 0 ? " · budget unpriced" : "";
       return {
-        outputs: { ok: v.success ? "1" : "0", stack: v.final_stack },
+        outputs: {
+          ok: v.success ? "1" : "0",
+          stack: v.final_stack,
+          ccv_out: JSON.stringify(v.ccv_state),
+        },
         status: v.success ? "ok" : "error",
-        message: v.success ? `ok · ${v.steps.length} steps` : (v.error ?? "rejected"),
+        message: v.success ? `ok · ${v.steps.length} steps${note}` : (v.error ?? "rejected"),
         extra: v,
       };
     } catch (e) {

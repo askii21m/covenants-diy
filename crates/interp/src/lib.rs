@@ -141,6 +141,30 @@ pub enum ExecCtx {
     Tapscript,
 }
 
+/// What BIP-443's amount rules accumulate across a transaction. The spec
+/// initialises this once and lets every input's script mutate it, so an
+/// interpreter that runs one input at a time has to be handed what earlier
+/// inputs left and hand on what it added. Threading it is what makes a
+/// multi-input covenant check mean the same thing here as on a node.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct CcvTxState {
+    /// Least each output must carry, summed over the inputs that said so.
+    pub output_min_amount: Vec<u64>,
+    /// Outputs already checked under the default amount semantic.
+    pub output_checked_default: Vec<bool>,
+    /// Outputs already checked under the deduct semantic.
+    pub output_checked_deduct: Vec<bool>,
+}
+
+impl CcvTxState {
+    fn sized(mut self, n: usize) -> Self {
+        self.output_min_amount.resize(n, 0);
+        self.output_checked_default.resize(n, false);
+        self.output_checked_deduct.resize(n, false);
+        self
+    }
+}
+
 pub struct TxTemplate {
     pub tx: Transaction,
     pub prevouts: Vec<TxOut>,
@@ -161,13 +185,11 @@ pub struct TxTemplate {
     /// Merkle root of the current input's tapscript tree, which BIP-443
     /// substitutes when a taptree of -1 is given.
     pub taptree_root: Option<[u8; 32]>,
+    /// What earlier inputs of this transaction already accumulated under
+    /// BIP-443's amount rules. Absent means this is the first input, or the
+    /// caller is not modelling the others.
+    pub ccv_state: Option<CcvTxState>,
     /// Value of the coin this input spends, when the caller knows it.
-    ///
-    /// BIP-443 tracks its amount rules per transaction, accumulating across
-    /// every input's script. One input runs here, so those rules cover the
-    /// calls this script makes and not a sibling input's: two inputs each
-    /// carrying their amount into the same output are summed by a node and
-    /// counted once here.
     /// Distinct from `prevouts`, which a caller may fill with placeholders
     /// to satisfy hashing: BIP-443's amount rules are only meaningful over
     /// a real amount, and a placeholder zero would satisfy them vacuously.
@@ -222,6 +244,11 @@ pub struct ExecStats {
     pub start_validation_weight: i64,
     /// The current remaining validation weight.
     pub validation_weight: i64,
+    /// Opcodes executed whose cost no BIP has settled yet. While this is
+    /// above zero the budget above is a lower bound on what will be spent,
+    /// not a figure any node would agree with, and has to be reported that
+    /// way rather than as a number.
+    pub unpriced_ops: usize,
 }
 
 /// Partial execution of a script.
@@ -249,6 +276,7 @@ pub struct Exec {
 
     opcode_count: usize,
     validation_weight: i64,
+    unpriced_ops: usize,
 
     // BIP-443 amount tracking. The spec initialises these once per
     // transaction and lets every input's script mutate them. This runs one
@@ -353,6 +381,7 @@ impl Exec {
         let start_validation_weight = VALIDATION_WEIGHT_OFFSET + witness_size as i64;
 
         let n_outputs = tx.tx.output.len();
+        let carried = tx.ccv_state.clone().unwrap_or_default().sized(n_outputs);
         // The residual starts at the whole amount this input is spending,
         // and stays unknown when the caller could not say what that is.
         let residual = tx.input_amount;
@@ -371,9 +400,10 @@ impl Exec {
             altstack: Stack::new(),
             opcode_count: 0,
             validation_weight: start_validation_weight,
-            ccv_output_min_amount: vec![0; n_outputs],
-            ccv_output_checked_default: vec![false; n_outputs],
-            ccv_output_checked_deduct: vec![false; n_outputs],
+            unpriced_ops: 0,
+            ccv_output_min_amount: carried.output_min_amount,
+            ccv_output_checked_default: carried.output_checked_default,
+            ccv_output_checked_deduct: carried.output_checked_deduct,
             ccv_residual_input_amount: residual,
             succeed_now: false,
             last_codeseparator_pos: None,
@@ -1249,11 +1279,13 @@ impl Exec {
             OP_RETURN_187 if self.ctx == ExecCtx::Tapscript && self.opt.deployments.ccv => {
                 use covenants_core::ccv::{self, CcvMode};
 
-                // BIP-443's own sigops section is still TODO, so nothing is
-                // charged here. Inventing a number would be a rule this tool
-                // made up, and the readout would then report a budget no node
-                // agrees with; the cost is two EC operations, so a real one is
-                // likely once the BIP settles.
+                // BIP-443's own sigops section is still TODO, so no weight is
+                // charged: inventing a number would be a consensus rule this
+                // tool made up. What is charged instead is honesty, by
+                // counting the call so the budget is reported as a lower
+                // bound rather than as a figure a node would agree with.
+                self.unpriced_ops += 1;
+                self.stats.unpriced_ops = self.unpriced_ops;
                 self.stack.needn(5)?;
                 let mode_num = self.stack.topnum(-1, self.opt.require_minimal)?;
                 let taptree = self.stack.topstr(-2)?;
@@ -1432,12 +1464,24 @@ impl Exec {
     // STATISTICS //
     ////////////////
 
+    /// What this input leaves for the next one under BIP-443's amount
+    /// rules. Feed it to the next input's TxTemplate to get the semantics a
+    /// node applies across the whole transaction.
+    pub fn ccv_state(&self) -> CcvTxState {
+        CcvTxState {
+            output_min_amount: self.ccv_output_min_amount.clone(),
+            output_checked_default: self.ccv_output_checked_default.clone(),
+            output_checked_deduct: self.ccv_output_checked_deduct.clone(),
+        }
+    }
+
     fn update_stats(&mut self) {
         let stack_items = self.stack.len() + self.altstack.len();
         self.stats.max_nb_stack_items = cmp::max(self.stats.max_nb_stack_items, stack_items);
 
         self.stats.opcode_count = self.opcode_count;
         self.stats.validation_weight = self.validation_weight;
+        self.stats.unpriced_ops = self.unpriced_ops;
     }
 }
 
