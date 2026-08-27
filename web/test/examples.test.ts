@@ -31,6 +31,27 @@ describe.each(Object.entries(EXAMPLES))("%s", (key, ex) => {
     }
   });
 
+  it("declares every scriptPubKey at the length its own prefix promises", () => {
+    // A witness program carries its length in the byte before it. Filling one
+    // by repeating a byte the wrong number of times built a 66-byte script
+    // whose prefix still said 32, which every hash in the graph then committed
+    // to quite happily: self-consistent, and impossible on chain.
+    const f = ex.build();
+    const bad: string[] = [];
+    for (const n of f.nodes) {
+      for (const [field, value] of Object.entries(n.data)) {
+        if (!/_spk$|^spk$/.test(field) || typeof value !== "string" || !value) continue;
+        const len = Number.parseInt(value.slice(2, 4), 16);
+        if (!/^51/.test(value)) continue;
+        const declared = 4 + len * 2;
+        if (value.length !== declared) {
+          bad.push(`${n.data.name || n.id}.${field}: ${value.length / 2} bytes, prefix says ${2 + len}`);
+        }
+      }
+    }
+    expect(bad, `${key} has a scriptPubKey that lies about its length`).toEqual([]);
+  });
+
   it("reports every script as enforced under its own ruleset", () => {
     const f = ex.build();
     const computed = evaluate(f.nodes, f.edges, f.network, f.ruleset);

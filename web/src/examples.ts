@@ -13,7 +13,11 @@ import { scriptBlock } from "./script/wrap";
 import { count, type NodeFields } from "./registry";
 import type { Network } from "./engine";
 
-const p2tr = (b: string) => "5120" + b.repeat(64);
+/** A placeholder P2TR scriptPubKey. The witness program is 32 bytes, so
+ *  the filler repeats to exactly 64 hex characters whether it is given
+ *  one or two: repeating a byte 64 times built a 66-byte script whose
+ *  own length prefix said 32. */
+const p2tr = (b: string) => "5120" + b.repeat(Math.ceil(64 / b.length)).slice(0, 64);
 const S = 416; // column pitch: 288 node + 128 gap
 const col = (i: number) => i * S;
 const drop = (i: number) => col(i) + 288 + 64;
