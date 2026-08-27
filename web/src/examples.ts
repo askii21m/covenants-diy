@@ -1060,6 +1060,117 @@ export function bip448(): Example {
   return { nodes, edges, network: "signet", ruleset: "bip448", select: "update" };
 }
 
+// --- hot and cold -------------------------------------------------------------
+
+/** Two leaves and no covenant opcode at all: the taproot shape everything
+ *  else here is built on top of. The hot key spends whenever it likes; the
+ *  cold key spends only after a relative delay, so a stolen hot key still
+ *  leaves a window. */
+export function hotcold(): Example {
+  const nodes: FlowNode[] = [];
+
+  const hot = node("hot", "key", col(0), 0, { secret: "11".repeat(32) });
+  const cold = node("cold", "key", col(0), 231, { secret: "22".repeat(32) });
+
+  const hotLeaf = node("hot_leaf", "tapscript", col(1), 0, {
+    source: ["# Spend now, with the hot key.", "@hot OP_CHECKSIG"].join("\n"),
+  });
+  const coldLeaf = node("cold_leaf", "tapscript", col(1), 231, {
+    source: [
+      "# Recovery: the cold key, but only",
+      "# 144 blocks after the coin lands.",
+      "144 OP_CHECKSEQUENCEVERIFY OP_DROP",
+      "@cold OP_CHECKSIG",
+    ].join("\n"),
+  });
+
+  const output = node("output", "taproot", col(2), 0, { nLeaves: 2 });
+  const spend = node("spend", "template", col(3), 0, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 1,
+    // The cold leaf's OP_CSV reads this. One below 144 and the spend is
+    // rejected, which is the whole point of the delay.
+    in0_seq: 144,
+    out0_value: 99_000,
+    out0_spk: p2tr("55"),
+  });
+  const funding = node("funding", "outpoint", col(4), 0, { txid: "f".repeat(64), vout: 0, value: 100_000 });
+  nodes.push(hot, cold, hotLeaf, coldLeaf, output, spend, funding);
+
+  const { lane, next: BOT } = band(nodes, 7);
+
+  // The cold path, one node per step. The hot leaf is built and committed
+  // to but not taken here: a spend takes one leaf, and this is the one
+  // worth watching, because it is the one the timelock gates.
+  const unsigned = node("unsigned", "transaction", col(4), BOT, { nIn: 1, nOut: 1 });
+  const sighash = node("sighash", "sighash", col(5), BOT, {
+    hash_type: "DEFAULT",
+    input_index: 0,
+    prevout_value: 100_000,
+  });
+  const coldSig = node("cold_sig", "sign", col(6), BOT, {});
+  const wit = node("witness", "witness", col(7), BOT, { nItems: 1 });
+  const signed = node("signed", "transaction", col(8), BOT, { nIn: 1, nOut: 1 });
+  const run = node("check", "execute", col(9), BOT, { input_index: 0 });
+  nodes.push(unsigned, sighash, coldSig, wit, signed, run);
+
+  const hops = [
+    via("hLeaf", ["cold_leaf", "script"], 1, 5, lane(0), ["sighash", "leaf"]),
+    via("hSpk", ["output", "spk"], 2, 5, lane(1), ["sighash", "prevout_spk"]),
+    via("hCold", ["cold", "sk"], 0, 6, lane(2), ["cold_sig", "secret"]),
+    // Leaf 1 is the cold one, so this is the control block that proves it.
+    via("hCtrl", ["output", "control1"], 2, 7, lane(3), ["witness", "control"]),
+    via("hTpl", ["spend", "template"], 3, 8, lane(4), ["signed", "template"]),
+    via("hOut", ["funding", "outpoint"], 4, 8, lane(5), ["signed", "prevout0"]),
+    via("hVal", ["funding", "value"], 4, 8, lane(6), ["signed", "value0"]),
+  ];
+  nodes.push(...hops.flatMap((h) => h.nodes));
+
+  const edges: Edge[] = [
+    wire("hot", "pubkey", "hot_leaf", "ref_hot"),
+    wire("cold", "pubkey", "cold_leaf", "ref_cold"),
+    wire("hot_leaf", "script", "output", "leaf0"),
+    wire("cold_leaf", "script", "output", "leaf1"),
+    ...hops.flatMap((h) => h.edges),
+    wire(hops[0].last, "out", "witness", "script"),
+    wire(hops[0].last, "out", "check", "script"),
+    wire(hops[1].last, "out", "check", "prevout_spk"),
+    wire("spend", "template", "unsigned", "template"),
+    wire("funding", "outpoint", "unsigned", "prevout0"),
+    wire("funding", "value", "unsigned", "value0"),
+    wire("unsigned", "hex", "sighash", "tx"),
+    wire("sighash", "sighash", "cold_sig", "message"),
+    wire("sighash", "type_byte", "cold_sig", "hash_type"),
+    wire("cold_sig", "sig", "witness", "item0"),
+    wire("witness", "witness", "signed", "witness0"),
+    wire("witness", "witness", "check", "witness"),
+    wire("signed", "hex", "check", "tx"),
+    // What the coin is worth comes from the coin itself, off the same lane
+    // that carries it into the transaction, not from a number typed in
+    // again here. An amount rule cannot be checked against an amount
+    // nobody supplied, and a zero would satisfy one.
+    wire(hops[6].last, "out", "check", "prevout_value"),
+  ];
+
+  nodes.unshift(
+    around("c_keys", "Two keys, one warm and one in a safe", "teal", nodes, ["hot", "cold"]),
+    around("c_coin", "One address, two ways out", "amber", nodes, ["hot_leaf", "cold_leaf", "output", "spend"]),
+    around("c_funded", "Paid in", "slate", nodes, ["funding"]),
+    around("c_spend", "Recovery: the cold key, once the delay is up", "blue", nodes, [
+      "unsigned",
+      "sighash",
+      "cold_sig",
+      "witness",
+      "signed",
+      "check",
+    ]),
+  );
+
+  return { nodes, edges, network: "signet", ruleset: "none" };
+}
+
 // --- recursive covenant with OP_CAT ------------------------------------------
 
 /** A coin that can only ever be spent back into itself.
@@ -1444,6 +1555,7 @@ export interface ExampleEntry {
  *  commit to a transaction, then check a signature, then rebind one, then
  *  take the transaction apart. */
 export const EXAMPLE_GROUPS: Array<{ title: string; keys: string[] }> = [
+  { title: "Taproot, with no covenant at all", keys: ["hotcold"] },
   { title: "CTV · commit to the next transaction", keys: ["vault", "pool"] },
   { title: "CSFS · check a signature over a message", keys: ["delegation", "oracle"] },
   { title: "Rebindable signatures", keys: ["bip448", "eltoo"] },
@@ -1451,6 +1563,13 @@ export const EXAMPLE_GROUPS: Array<{ title: string; keys: string[] }> = [
 ];
 
 export const EXAMPLES: Record<string, ExampleEntry> = {
+  hotcold: {
+    label: "Hot and cold",
+    name: "hot and cold",
+    blurb: "Two leaves, one spendable now and one after a delay",
+    needs: "none",
+    build: hotcold,
+  },
   vault: {
     label: "Vault",
     name: "vault",
