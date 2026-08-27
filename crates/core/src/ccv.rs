@@ -19,9 +19,8 @@
 use std::sync::OnceLock;
 
 use bitcoin::hashes::{sha256, Hash};
-use bitcoin::key::TapTweak;
 use bitcoin::secp256k1::{Scalar, Secp256k1, VerifyOnly, XOnlyPublicKey};
-use bitcoin::taproot::TapNodeHash;
+use bitcoin::taproot::{TapNodeHash, TapTweakHash};
 use bitcoin::ScriptBuf;
 
 /// Check an input's script; no amount check.
@@ -60,15 +59,13 @@ impl CcvMode {
     }
 }
 
+/// The only way this arithmetic fails. Parameter shapes are rejected before
+/// they reach here, by the interpreter that reads them off the stack.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CcvError {
-    /// The naked key is not a valid x-only point.
-    NakedKey,
     /// A tweak landed outside the group order, or the tweaked point is the
     /// point at infinity. Both are unreachable for honestly chosen data.
     Tweak,
-    /// The taptree parameter is neither empty, nor -1, nor 32 bytes.
-    TaptreeLength,
 }
 
 fn secp() -> &'static Secp256k1<VerifyOnly> {
@@ -104,8 +101,16 @@ pub fn expected_script_pubkey(
     let internal = tweak_embed_data(naked, data)?;
     let output_key = match taptree {
         Some(root) => {
-            let (key, _parity) = internal.tap_tweak(secp(), Some(TapNodeHash::assume_hidden(root)));
-            key.to_x_only_public_key()
+            // rust-bitcoin's tap_tweak panics on a tweak out of range rather
+            // than returning, and the root here is an arbitrary push from a
+            // script, so the same arithmetic is done with the error kept.
+            let t =
+                TapTweakHash::from_key_and_tweak(internal, Some(TapNodeHash::assume_hidden(root)));
+            let scalar = Scalar::from_be_bytes(t.to_byte_array()).map_err(|_| CcvError::Tweak)?;
+            let (key, _parity) = internal
+                .add_tweak(secp(), &scalar)
+                .map_err(|_| CcvError::Tweak)?;
+            key
         }
         None => internal,
     };
@@ -119,7 +124,9 @@ pub fn expected_script_pubkey(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use bitcoin::hex::FromHex;
+    // The differential check below compares this module's own tweak against
+    // rust-bitcoin's, which is the point of keeping both.
+    use bitcoin::key::TapTweak;
     use std::str::FromStr;
 
     /// Private key 7, so the vectors are reproducible from the model.
@@ -272,6 +279,5 @@ mod tests {
             )
             .unwrap()
         );
-        let _ = Vec::<u8>::from_hex("00").unwrap();
     }
 }
