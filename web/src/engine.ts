@@ -75,7 +75,11 @@ const LEGACY: Record<string, Array<keyof Ruleset>> = {
   apo: ["apo"],
   catall: ["cat", "csfs"],
   bip448: ["templatehash", "csfs", "internalkey"],
-  all: FLAGS.map((f) => f.id),
+  // Frozen, not derived. A link that stored "all" meant the flags the tool
+  // modelled that day; letting it track FLAGS would silently re-judge an
+  // already-shared graph every time an opcode lands, and 0xbb went from
+  // anyone-can-spend to enforced exactly that way.
+  all: ["ctv", "csfs", "cat", "apo", "templatehash", "internalkey", "paircommit", "txhash"],
 };
 
 const on = (ids: Array<keyof Ruleset>): Ruleset => R(Object.fromEntries(ids.map((i) => [i, true])));
