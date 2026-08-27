@@ -129,6 +129,24 @@ pub fn parse_opcode(s: &str) -> Result<Opcode, ()> {
                 // OP_1NEGATE is what Core and every reference call it;
                 // rust-bitcoin's spelling is the other one.
                 "PUSHNUM_NEG1" | "1NEGATE" => Ok(OP_PUSHNUM_NEG1),
+                // rust-bitcoin's spelling, so anything rendered elsewhere and
+                // pasted in here still parses.
+                "PUSHNUM_1" => Ok(OP_PUSHNUM_1),
+                "PUSHNUM_2" => Ok(OP_PUSHNUM_2),
+                "PUSHNUM_3" => Ok(OP_PUSHNUM_3),
+                "PUSHNUM_4" => Ok(OP_PUSHNUM_4),
+                "PUSHNUM_5" => Ok(OP_PUSHNUM_5),
+                "PUSHNUM_6" => Ok(OP_PUSHNUM_6),
+                "PUSHNUM_7" => Ok(OP_PUSHNUM_7),
+                "PUSHNUM_8" => Ok(OP_PUSHNUM_8),
+                "PUSHNUM_9" => Ok(OP_PUSHNUM_9),
+                "PUSHNUM_10" => Ok(OP_PUSHNUM_10),
+                "PUSHNUM_11" => Ok(OP_PUSHNUM_11),
+                "PUSHNUM_12" => Ok(OP_PUSHNUM_12),
+                "PUSHNUM_13" => Ok(OP_PUSHNUM_13),
+                "PUSHNUM_14" => Ok(OP_PUSHNUM_14),
+                "PUSHNUM_15" => Ok(OP_PUSHNUM_15),
+                "PUSHNUM_16" => Ok(OP_PUSHNUM_16),
                 "RESERVED" => Ok(OP_RESERVED),
                 "NOP" => Ok(OP_NOP),
                 "VER" => Ok(OP_VER),

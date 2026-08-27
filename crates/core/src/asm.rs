@@ -60,12 +60,19 @@ impl FromAsm for ScriptBuf {
                 continue;
             }
             // Anything the opcode table does not name is a number or a push.
-            if word.starts_with('<') && word.ends_with('>') {
+            // Angle brackets say "these bytes", so a bracketed word is hex and
+            // never a number: the disassembler writes every push that way, and
+            // reading <9000> as nine thousand meant its own output assembled
+            // back to different bytes.
+            let bracketed = word.starts_with('<') && word.ends_with('>');
+            if bracketed {
                 word = &word[1..word.len() - 1];
             }
-            if let Ok(i) = i64::from_str(word) {
-                builder = builder.push_int(i);
-                continue;
+            if !bracketed {
+                if let Ok(i) = i64::from_str(word) {
+                    builder = builder.push_int(i);
+                    continue;
+                }
             }
             // Hex, with or without a 0x prefix.
             if word.starts_with("0x") {
