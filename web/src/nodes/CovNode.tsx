@@ -32,18 +32,16 @@ function Field({ port, value, onChange }: { port: Port; value: unknown; onChange
   const [focused, setFocused] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pending = useRef<string | null>(null);
-  const shown = (v: unknown) =>
-    v == null
-      ? ""
-      : port.field === "number" && port.label.includes("sat") && Number.isFinite(Number(v))
-        ? sats(v as Value)
-        : String(v);
+  // Plain, never grouped. This is an <input type="number">, and a browser
+  // blanks one whose value it cannot read as a number, so "98 000" showed as
+  // an empty field and looked like the amount had been thrown away. The
+  // grouped form is for the readouts below, which are not inputs.
+  const shown = (v: unknown) => (v == null ? "" : String(v));
   const parse = (v: string) => (port.field === "number" ? Number(v.replace(/[\s,_]/g, "")) : v.trim());
   useEffect(() => {
     if (!focused) setDraft(shown(value));
-    // shown is rebuilt every render, so listing it would re-run this on every
-    // render and overwrite whatever is being typed.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only when it does not have the caret: following the store while
+    // someone is mid-number would overwrite what they are typing.
   }, [value, focused]);
   useEffect(() => () => clearTimeout(timer.current), []);
   const commit = (v: string) => {
