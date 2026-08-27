@@ -708,6 +708,10 @@ textarea {
   font-family: var(--sans);
   font-size: 12px;
 }
+/* A value the node does not need reads quieter than one it is waiting for. */
+.cov .r .f.empty.opt {
+  opacity: 0.6;
+}
 .cov .r .v {
   font: 12.5px var(--mono);
   color: var(--t2);
@@ -780,8 +784,18 @@ textarea {
   top: 50%;
   transform: translateY(-50%);
 }
+/* An input dot says whether the node needs the value: filled for one it
+   cannot compute without, hollow for one it can, half for one needed only
+   under the condition the title gives. */
 .cov .r.in .p {
   left: -6px;
+  background: var(--t3);
+}
+.cov .r.in .p.opt {
+  background: var(--surface);
+}
+.cov .r.in .p.cond {
+  background: linear-gradient(to right, var(--t3) 0 50%, var(--surface) 50% 100%);
 }
 .cov .r.out .p {
   right: -6px;

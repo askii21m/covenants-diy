@@ -62,6 +62,11 @@ export interface Port {
   options?: string[];
   /** Rendered as a block rather than a row (the script editor). */
   wide?: boolean;
+  /** Absent means the node cannot compute without this value. `true` means
+   *  it can. A string means the same and says what makes the value
+   *  necessary, for the ones only needed sometimes, which is the state a
+   *  reader has no other way to learn. */
+  optional?: true | string;
   /** Range a numeric field may hold. Enforced before the node computes,
    *  and given to the input so it cannot be typed past. A field that takes
    *  a value the node cannot honour is the editor lying about what will
@@ -151,6 +156,10 @@ export interface NodeKind {
 
 const P = (id: string, label: string, type: PortType, field?: Port["field"], wide?: boolean): Port =>
   wide ? { id, label, type, field, wide } : field ? { id, label, type, field } : { id, label, type };
+
+/** Mark a port the node computes without. The reason, where there is one,
+ *  is what the row shows on hover. */
+const opt = (p: Port, reason?: string): Port => ({ ...p, optional: reason ?? true });
 
 const str = (v: Value | undefined): string => (v == null ? "" : Array.isArray(v) ? v.join("") : String(v));
 const num = (v: Value | undefined, dflt = 0): number => {
@@ -306,7 +315,7 @@ const taproot: NodeKind = {
   description: "Internal key and leaf scripts to an address, scriptPubKey and a control block per leaf.",
   defaults: () => ({ name: "output", nLeaves: 1, internal_key: "" }),
   inputs: (f) => {
-    const ports: Port[] = [P("internal_key", "internal key", "hash", "hex")];
+    const ports: Port[] = [opt(P("internal_key", "internal key", "hash", "hex"))];
     for (let i = 0; i < count(f, "nLeaves", 1); i++) ports.push(P(`leaf${i}`, `leaf[${i}]`, "script"));
     return ports;
   },
@@ -355,7 +364,7 @@ const transaction: NodeKind = {
     const ports: Port[] = [P("template", "template", "tx")];
     for (let i = 0; i < count(f, "nIn", 1); i++) {
       ports.push(P(`prevout${i}`, `prevout[${i}]`, "outpoint", "text"));
-      ports.push(P(`witness${i}`, `witness[${i}]`, "witness"));
+      ports.push(opt(P(`witness${i}`, `witness[${i}]`, "witness")));
       ports.push(N(`value${i}`, `value[${i}] sat`, 0, MAX_MONEY));
     }
     return ports;
@@ -408,7 +417,7 @@ const witness: NodeKind = {
   defaults: () => ({ name: "witness", nItems: 0 }),
   inputs: (f) => {
     const ports: Port[] = [];
-    for (let i = 0; i < count(f, "nItems", 0); i++) ports.push(P(`item${i}`, `item[${i}]`, "hex", "hex"));
+    for (let i = 0; i < count(f, "nItems", 0); i++) ports.push(opt(P(`item${i}`, `item[${i}]`, "hex", "hex")));
     ports.push(P("script", "script", "script"), P("control", "control block", "hex"));
     return ports;
   },
@@ -453,14 +462,14 @@ const execute: NodeKind = {
   defaults: () => ({ name: "execute", input_index: 0 }),
   inputs: () => [
     P("script", "script", "script"),
-    P("witness", "witness", "witness"),
-    P("tx", "tx hex", "tx"),
+    opt(P("witness", "witness", "witness")),
+    opt(P("tx", "tx hex", "tx"), "if the script reads the transaction"),
     N("input_index", "input index", 0, U32_MAX),
-    N("prevout_value", "prevout sat", 0, MAX_MONEY),
-    P("prevout_spk", "prevout spk", "spk"),
-    P("control", "control block", "hex"),
-    P("ccv_in", "ccv carry in", "ccvstate"),
-    P("vault_in", "vault carry in", "vaultstate"),
+    opt(N("prevout_value", "prevout sat", 0, MAX_MONEY), "if an amount rule runs"),
+    opt(P("prevout_spk", "prevout spk", "spk"), "if the script reads the coin being spent"),
+    opt(P("control", "control block", "hex"), "unless the witness already carries it"),
+    opt(P("ccv_in", "ccv carry in", "ccvstate"), "after the first input"),
+    opt(P("vault_in", "vault carry in", "vaultstate"), "after the first input"),
   ],
   outputs: () => [
     P("ok", "result", "number"),
@@ -533,7 +542,11 @@ const templateHash: NodeKind = {
   description:
     "BIP-446: the hash OP_TEMPLATEHASH pushes. Commits to version, locktime, every sequence, every output, the annex and this input's index, and to nothing about the coins being spent, which is what makes a signature over it rebindable.",
   defaults: () => ({ name: "template hash", input_index: 0 }),
-  inputs: () => [P("tx", "tx", "tx"), N("input_index", "input index", 0, U32_MAX), P("annex", "annex", "hex", "hex")],
+  inputs: () => [
+    P("tx", "tx", "tx"),
+    N("input_index", "input index", 0, U32_MAX),
+    opt(P("annex", "annex", "hex", "hex")),
+  ],
   outputs: () => [P("hash", "template hash", "hash")],
   compute: (f, w) => {
     const tx = str(get(f, w, "tx"));
@@ -634,7 +647,7 @@ const concat: NodeKind = {
   defaults: () => ({ name: "concat", nParts: 2, part0: "", part1: "" }),
   inputs: (f) => {
     const ports: Port[] = [];
-    for (let i = 0; i < count(f, "nParts", 2); i++) ports.push(P(`part${i}`, `part[${i}]`, "hex", "hex"));
+    for (let i = 0; i < count(f, "nParts", 2); i++) ports.push(opt(P(`part${i}`, `part[${i}]`, "hex", "hex")));
     return ports;
   },
   outputs: () => [P("hex", "bytes", "hex"), P("length", "length", "number")],

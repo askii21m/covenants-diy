@@ -12,6 +12,7 @@ export const NODE_TESTS = [
   "test/txhash.test.ts",
   "test/ccv.test.ts",
   "test/vault.test.ts",
+  "test/ports.test.ts",
 ];
 
 export default defineConfig({

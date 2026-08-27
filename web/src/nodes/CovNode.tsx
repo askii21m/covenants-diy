@@ -68,7 +68,7 @@ function Field({ port, value, onChange }: { port: Port; value: unknown; onChange
     <input
       className={`f nodrag nopan ${port.field === "number" ? "n" : ""}`}
       value={draft}
-      placeholder={port.field === "hex" ? "hex" : port.field === "number" ? "0" : ""}
+      placeholder={port.optional ? "optional" : port.field === "hex" ? "hex" : port.field === "number" ? "0" : ""}
       type={port.field === "number" ? "number" : undefined}
       min={port.min}
       max={port.max}
@@ -233,8 +233,8 @@ function CovNodeImpl({ id, data, selected }: NodeProps<FlowNode>) {
                 type="target"
                 position={Position.Left}
                 id={p.id}
-                className={`p t-${p.type}${dim(p, "target")}`}
-                title={`${p.label} · ${p.type}${wiredValue(p.id) !== undefined ? " · alt-click to disconnect" : ""}`}
+                className={`p t-${p.type}${p.optional ? (typeof p.optional === "string" ? " cond" : " opt") : ""}${dim(p, "target")}`}
+                title={`${p.label} · ${p.type}${typeof p.optional === "string" ? `\nneeded ${p.optional}` : ""}${wiredValue(p.id) !== undefined ? " · alt-click to disconnect" : ""}`}
                 {...pinProps(p.id, "target")}
               />
               <span className="l">{p.label}</span>
@@ -248,8 +248,11 @@ function CovNodeImpl({ id, data, selected }: NodeProps<FlowNode>) {
                   );
                 if (!p.field)
                   return (
-                    <span className="f empty" title="wire a value in">
-                      not wired
+                    <span
+                      className={`f empty${p.optional ? " opt" : ""}`}
+                      title={p.optional ? "the node computes without this" : "wire a value in"}
+                    >
+                      {p.optional ? "optional" : "needed"}
                     </span>
                   );
                 if (p.field === "select")
