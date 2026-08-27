@@ -23,6 +23,7 @@ export type PortType =
   | "text"
   | "address"
   | "ccvstate"
+  | "vaultstate"
   | "any";
 
 const HEXISH: ReadonlySet<PortType> = new Set(["hash", "script", "tx", "spk", "hex"]);
@@ -459,11 +460,13 @@ const execute: NodeKind = {
     P("prevout_spk", "prevout spk", "spk"),
     P("control", "control block", "hex"),
     P("ccv_in", "ccv carry in", "ccvstate"),
+    P("vault_in", "vault carry in", "vaultstate"),
   ],
   outputs: () => [
     P("ok", "result", "number"),
     P("stack", "final stack", "witness"),
     P("ccv_out", "ccv carry out", "ccvstate"),
+    P("vault_out", "vault carry out", "vaultstate"),
   ],
   compute: (f, w, ctx) => {
     const script = str(w.script);
@@ -475,19 +478,32 @@ const execute: NodeKind = {
       str(w.control) || (full.length >= 2 && full[full.length - 2] === script ? full[full.length - 1] : "");
     const spk = str(w.prevout_spk);
     const carry = str(w.ccv_in);
+    const vaultCarry = str(w.vault_in);
+    const idx = num(get(f, w, "input_index"));
     try {
       const v = wasm.execute({
         script,
         stack,
         tx: str(w.tx) || undefined,
-        input_index: num(get(f, w, "input_index")),
-        prevouts: spk ? [{ value: sats(get(f, w, "prevout_value")), script_pubkey: spk }] : [],
+        input_index: idx,
+        // The prevout has to land at the index it belongs to: BIP-345 and
+        // BIP-443 read the spent coin by input index, so one handed in at
+        // slot 0 leaves every later input with no amount at all.
+        prevouts: spk
+          ? [
+              ...Array.from({ length: idx }, () => ({ script_pubkey: "" })),
+              { value: sats(get(f, w, "prevout_value")), script_pubkey: spk },
+            ]
+          : [],
         control_block: control || undefined,
         ruleset: ctx.ruleset,
         // BIP-443 accumulates its amount rules across every input of the
         // transaction, so running one input at a time only agrees with a
         // node when what the last one left is carried into the next.
         ccv_state: carry ? JSON.parse(carry) : undefined,
+        // BIP-345 defers its amount checks to after every input has been
+        // evaluated, for the same reason and with the same fix.
+        vault_state: vaultCarry ? JSON.parse(vaultCarry) : undefined,
       });
       // A budget is only a figure while every opcode that ran has a settled
       // weight. Reporting one that quietly assumed an unpriced opcode is
@@ -498,6 +514,7 @@ const execute: NodeKind = {
           ok: v.success ? "1" : "0",
           stack: v.final_stack,
           ccv_out: JSON.stringify(v.ccv_state),
+          vault_out: JSON.stringify(v.vault_state),
         },
         status: v.success ? "ok" : "error",
         message: v.success ? `ok · ${v.steps.length} steps${note}` : (v.error ?? "rejected"),

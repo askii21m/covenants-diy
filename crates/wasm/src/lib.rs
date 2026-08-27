@@ -345,6 +345,12 @@ pub struct AssembleView {
 #[wasm_bindgen]
 pub fn assemble(req: Ts<AssembleRequest>) -> Result<Ts<AssembleView>, JsError> {
     let req = req.to_rust().map_err(err("request"))?;
+    // A ruleset that cannot say which opcode 0xbb is would have this render
+    // and grade the byte as whichever arm the build checks first, which is
+    // the answer `execute` refuses to give.
+    if let Some(clash) = req.ruleset.conflict() {
+        return Err(JsError::new(clash));
+    }
     let refs = match source::refs(&req.source) {
         Ok(r) => r,
         Err(e) => {
@@ -371,7 +377,7 @@ pub fn assemble(req: Ts<AssembleRequest>) -> Result<Ts<AssembleView>, JsError> {
     let view = match source::assemble(&req.source, &bindings) {
         Ok(a) => AssembleView {
             refs,
-            asm: Some(asm::render(&a.script)),
+            asm: Some(asm::render(&a.script, req.ruleset.vault)),
             leaf_hash: Some(
                 TapLeafHash::from_script(&a.script, LeafVersion::TapScript).to_string(),
             ),
@@ -395,17 +401,23 @@ pub fn assemble(req: Ts<AssembleRequest>) -> Result<Ts<AssembleView>, JsError> {
     view.into_ts().map_err(err("response"))
 }
 
-/// Script hex to covenant-aware assembly.
+/// Script hex to covenant-aware assembly. `vault` says whether 0xbb is read
+/// as BIP-345's OP_VAULT or BIP-443's OP_CHECKCONTRACTVERIFY, since the two
+/// share the byte and the bytes alone cannot say which was meant.
 #[wasm_bindgen]
-pub fn disassemble(script_hex: &str) -> Result<String, JsError> {
+pub fn disassemble(script_hex: &str, vault: Option<bool>) -> Result<String, JsError> {
     Ok(asm::render(
         ScriptBuf::from(hex(script_hex, "script")?).as_script(),
+        vault.unwrap_or(false),
     ))
 }
 
 #[wasm_bindgen]
 pub fn classify(script_hex: &str, ruleset: Ts<Ruleset>) -> Result<Ts<EnforcementReport>, JsError> {
     let ruleset = ruleset.to_rust().map_err(err("ruleset"))?;
+    if let Some(clash) = ruleset.conflict() {
+        return Err(JsError::new(clash));
+    }
     enforce::classify(
         ScriptBuf::from(hex(script_hex, "script")?).as_script(),
         &ruleset,
@@ -953,6 +965,14 @@ pub fn opcodes() -> Result<Ts<OpcodeCatalog>, JsError> {
         "covenants",
         "covenant",
         Some("ccv"),
+    );
+    add("OP_VAULT", None, "covenants", "covenant", Some("vault"));
+    add(
+        "OP_VAULT_RECOVER",
+        None,
+        "covenants",
+        "covenant",
+        Some("vault"),
     );
 
     // Disabled before taproot, OP_SUCCESSx inside a tapscript: writing one

@@ -247,6 +247,11 @@ pub fn parse_opcode(s: &str) -> Result<Opcode, ()> {
                 "TXHASH" => Ok(OP_RETURN_189),
                 // BIP-443. OP_SUCCESS187.
                 "CHECKCONTRACTVERIFY" | "CCV" => Ok(OP_RETURN_187),
+                // BIP-345. OP_SUCCESS187 and OP_SUCCESS188. OP_VAULT wants
+                // the byte CHECKCONTRACTVERIFY wants, so which opcode 0xbb
+                // is depends on which of the two is deployed.
+                "VAULT" => Ok(OP_RETURN_187),
+                "VAULT_RECOVER" | "VAULTRECOVER" => Ok(OP_RETURN_188),
 
                 "NOP4" => Ok(OP_NOP4),
                 "NOP5" => Ok(OP_NOP5),

@@ -10,7 +10,7 @@ import { Detail } from "./panels/Detail";
 import { InlineName } from "./nodes/InlineName";
 import { EXAMPLES, EXAMPLE_GROUPS } from "./examples";
 import { shortLink, decodeFlow, fetchShared, fragmentOnUrl, idOnUrl, type SharedDoc } from "./share";
-import { NETWORKS, FLAGS, PRESETS, flagsOf, nameOf, summaryOf } from "./engine";
+import { NETWORKS, FLAGS, PRESETS, flagsOf, nameOf, summaryOf, toggle } from "./engine";
 
 /** A flow file: the document's flow, its name, and the view it was left
  *  at. Older files have no name and take the file's. */
@@ -457,7 +457,7 @@ export default function App() {
     },
   ];
 
-  // Six switches, and the bundles people have actually proposed. The
+  // The switches, and the bundles people have actually proposed. The
   // switches stay open as they are set; a bundle sets them all and closes.
   const rulesItems: MenuItem[] = [
     { label: "Opcodes", heading: true },
@@ -466,7 +466,7 @@ export default function App() {
       shortcut: f.bip,
       checked: flags[f.id],
       keepOpen: true,
-      onClick: () => setRuleset(nameOf({ ...flags, [f.id]: !flags[f.id] })),
+      onClick: () => setRuleset(nameOf(toggle(flags, f.id))),
     })),
     ...(["Proposed", "Running"] as const).flatMap((g) => [
       { separator: true, label: "" },

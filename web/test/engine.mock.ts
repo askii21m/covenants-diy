@@ -21,6 +21,7 @@ export type Ruleset = {
   paircommit: boolean;
   txhash: boolean;
   ccv: boolean;
+  vault: boolean;
 };
 
 export const FLAGS: Array<{ id: keyof Ruleset; label: string; bip: string }> = [
@@ -33,7 +34,22 @@ export const FLAGS: Array<{ id: keyof Ruleset; label: string; bip: string }> = [
   { id: "paircommit", label: "OP_PAIRCOMMIT", bip: "BIP 442" },
   { id: "txhash", label: "OP_TXHASH", bip: "BIP 346" },
   { id: "ccv", label: "OP_CHECKCONTRACTVERIFY", bip: "BIP 443" },
+  { id: "vault", label: "OP_VAULT", bip: "BIP 345" },
 ];
+
+const EXCLUSIVE: Array<[keyof Ruleset, keyof Ruleset]> = [["ccv", "vault"]];
+
+export function toggle(flags: Ruleset, id: keyof Ruleset): Ruleset {
+  const next = { ...flags, [id]: !flags[id] };
+  if (next[id]) {
+    for (const [a, b] of EXCLUSIVE) {
+      if (a === id) next[b] = false;
+      else if (b === id) next[a] = false;
+    }
+  }
+  return next;
+}
+export const shortLabel = (id: keyof Ruleset) => String(id).toUpperCase();
 export const PRESETS: Array<{ label: string; hint?: string; on: Array<keyof Ruleset> }> = [
   { label: "none", on: [] },
   { label: "CTV", on: ["ctv"] },
@@ -48,7 +64,7 @@ const LEGACY: Record<string, Array<keyof Ruleset>> = {
   apo: ["apo"],
   catall: ["cat", "csfs"],
   bip448: ["templatehash", "csfs", "internalkey"],
-  all: FLAGS.map((f) => f.id),
+  all: ["ctv", "csfs", "cat", "apo", "templatehash", "internalkey", "paircommit", "txhash"],
 };
 const on = (ids: Array<keyof Ruleset>): Ruleset =>
   FLAGS.reduce((a, f) => ({ ...a, [f.id]: ids.includes(f.id) }), {}) as Ruleset;
@@ -57,13 +73,18 @@ export const nameOf = (flags: Ruleset): string => {
   const set = FLAGS.filter((f) => flags[f.id]).map((f) => f.id);
   return set.length ? set.join("+") : "none";
 };
+const clashes = (parts: string[]): boolean => EXCLUSIVE.some(([a, b]) => parts.includes(a) && parts.includes(b));
 export const flagsOf = (ruleset: string): Ruleset => {
   if (Object.hasOwn(LEGACY, ruleset)) return on(LEGACY[ruleset]);
   const parts = ruleset.split("+");
-  return parts.every((p) => FLAGS.some((f) => f.id === p)) ? on(parts as Array<keyof Ruleset>) : on([]);
+  if (!parts.every((p) => FLAGS.some((f) => f.id === p)) || clashes(parts)) return on([]);
+  return on(parts as Array<keyof Ruleset>);
 };
-export const isRuleset = (s: string): boolean =>
-  Object.hasOwn(LEGACY, s) || s.split("+").every((p) => FLAGS.some((f) => f.id === p));
+export const isRuleset = (s: string): boolean => {
+  if (Object.hasOwn(LEGACY, s)) return true;
+  const parts = s.split("+");
+  return parts.every((p) => FLAGS.some((f) => f.id === p)) && !clashes(parts);
+};
 export const summaryOf = (flags: Ruleset): string => nameOf(flags);
 
 export const NETWORKS = ["signet", "regtest", "bitcoin"] as const;

@@ -8,41 +8,7 @@
 //! values, a state number and a balance say, into one 32-byte commitment
 //! without spending the opcodes that taking them apart again would cost.
 
-use bitcoin::hashes::{sha256, Hash, HashEngine};
-
-/// BIP-340 tagged hash.
-fn tagged(tag: &str, data: &[u8]) -> [u8; 32] {
-    let t = sha256::Hash::hash(tag.as_bytes());
-    let mut e = sha256::Hash::engine();
-    e.input(t.as_byte_array());
-    e.input(t.as_byte_array());
-    e.input(data);
-    sha256::Hash::from_engine(e).to_byte_array()
-}
-
-/// Bitcoin's CompactSize. Script elements cap at 520 bytes, so only the
-/// one-byte and three-byte forms are reachable, but the rest is written out
-/// because the encoding is the encoding.
-fn compact_size(n: usize) -> Vec<u8> {
-    match n {
-        0..=0xfc => vec![n as u8],
-        0xfd..=0xffff => {
-            let mut v = vec![0xfd];
-            v.extend_from_slice(&(n as u16).to_le_bytes());
-            v
-        }
-        0x1_0000..=0xffff_ffff => {
-            let mut v = vec![0xfe];
-            v.extend_from_slice(&(n as u32).to_le_bytes());
-            v
-        }
-        _ => {
-            let mut v = vec![0xff];
-            v.extend_from_slice(&(n as u64).to_le_bytes());
-            v
-        }
-    }
-}
+use crate::tagged::{compact_size, tagged};
 
 /// `hash_PairCommit(compact_size(len(x1)) || x1 || compact_size(len(x2)) || x2)`,
 /// where x2 is the top of the stack.

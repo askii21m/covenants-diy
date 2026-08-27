@@ -13,7 +13,7 @@ use bitcoin::{
     absolute, transaction, Amount, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Witness,
 };
 use covenants_core::enforce::Ruleset;
-use covenants_interp::{CcvTxState, Deployments, Exec, ExecCtx, Options, TxTemplate};
+use covenants_interp::{CcvTxState, Deployments, Exec, ExecCtx, Options, TxTemplate, VaultTxState};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -30,6 +30,7 @@ fn deployments(r: &Ruleset) -> Deployments {
         paircommit: r.paircommit,
         txhash: r.txhash,
         ccv: r.ccv,
+        vault: r.vault,
     }
 }
 
@@ -83,6 +84,12 @@ pub struct DebugRequest {
     #[serde(default)]
     #[tsify(optional)]
     pub ccv_state: Option<CcvStateSpec>,
+    /// BIP-345's deferred amount checks, as returned by a previous run.
+    /// Absent means this input is judged on its own, which is only the whole
+    /// story for a transaction with one input.
+    #[serde(default)]
+    #[tsify(optional)]
+    pub vault_state: Option<VaultStateSpec>,
 }
 
 /// BIP-443's transaction-wide amount state, in and out, so a caller running
@@ -95,6 +102,30 @@ pub struct CcvStateSpec {
     pub output_checked_default: Vec<bool>,
     #[serde(default)]
     pub output_checked_deduct: Vec<bool>,
+}
+
+/// BIP-345's transaction-wide amount state, in and out, so a caller running
+/// one input at a time can thread it and get what a node would decide.
+#[derive(Debug, Clone, Default, Deserialize, Serialize, Tsify)]
+pub struct VaultStateSpec {
+    #[serde(default)]
+    pub output_min_amount: Vec<u64>,
+}
+
+impl From<VaultStateSpec> for VaultTxState {
+    fn from(s: VaultStateSpec) -> Self {
+        VaultTxState {
+            output_min_amount: s.output_min_amount,
+        }
+    }
+}
+
+impl From<VaultTxState> for VaultStateSpec {
+    fn from(s: VaultTxState) -> Self {
+        VaultStateSpec {
+            output_min_amount: s.output_min_amount,
+        }
+    }
 }
 
 impl From<CcvStateSpec> for CcvTxState {
@@ -148,6 +179,7 @@ pub struct DebugTrace {
     pub unpriced_ops: usize,
     /// BIP-443 amount state after this input, to hand to the next one.
     pub ccv_state: CcvStateSpec,
+    pub vault_state: VaultStateSpec,
 }
 
 fn hex_bytes(s: &str, what: &str) -> Result<Vec<u8>, String> {
@@ -251,8 +283,10 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
         }
         None => None,
     };
-    let positions: HashMap<usize, String> = asm::instructions(&script).into_iter().collect();
-    let rendered = asm::render(&script);
+    let positions: HashMap<usize, String> = asm::instructions(&script, req.ruleset.vault)
+        .into_iter()
+        .collect();
+    let rendered = asm::render(&script, req.ruleset.vault);
 
     let mut exec = Exec::new(
         ExecCtx::Tapscript,
@@ -269,6 +303,7 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
             full_witness_size,
             control_block: control_block_bytes,
             ccv_state: req.ccv_state.clone().map(Into::into),
+            vault_state: req.vault_state.clone().map(Into::into),
             taptree_root,
             input_amount: req.prevouts.get(input_index).and_then(|p| p.value),
         },
@@ -345,6 +380,7 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
                     validation_weight_remaining: exec.stats().validation_weight,
                     unpriced_ops: exec.stats().unpriced_ops,
                     ccv_state: exec.ccv_state().into(),
+                    vault_state: exec.vault_state().into(),
                     asm: rendered,
                 });
             }

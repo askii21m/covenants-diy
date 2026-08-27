@@ -11,6 +11,7 @@ export const NODE_TESTS = [
   "test/functions.test.ts",
   "test/txhash.test.ts",
   "test/ccv.test.ts",
+  "test/vault.test.ts",
 ];
 
 export default defineConfig({

@@ -4,14 +4,17 @@
 
 use bitcoin::hex::DisplayHex;
 use bitcoin::opcodes::all::{
-    OP_NOP4, OP_PUSHNUM_1, OP_PUSHNUM_16, OP_PUSHNUM_NEG1, OP_RETURN_187, OP_RETURN_189,
-    OP_RETURN_203, OP_RETURN_204, OP_RETURN_205, OP_RETURN_206,
+    OP_NOP4, OP_PUSHNUM_1, OP_PUSHNUM_16, OP_PUSHNUM_NEG1, OP_RETURN_187, OP_RETURN_188,
+    OP_RETURN_189, OP_RETURN_203, OP_RETURN_204, OP_RETURN_205, OP_RETURN_206,
 };
 use bitcoin::opcodes::Opcode;
 use bitcoin::script::Instruction;
 use bitcoin::Script;
 
-pub fn op_name(op: Opcode) -> String {
+/// `vault` picks which opcode 0xbb is rendered as: BIP-345 and BIP-443
+/// claim the same byte, so only the active deployment says which name is
+/// the truthful one.
+pub fn op_name(op: Opcode, vault: bool) -> String {
     match op {
         OP_NOP4 => "OP_CHECKTEMPLATEVERIFY".to_string(),
         OP_RETURN_204 => "OP_CHECKSIGFROMSTACK".to_string(),
@@ -19,7 +22,9 @@ pub fn op_name(op: Opcode) -> String {
         OP_RETURN_203 => "OP_INTERNALKEY".to_string(),
         OP_RETURN_205 => "OP_PAIRCOMMIT".to_string(),
         OP_RETURN_189 => "OP_TXHASH".to_string(),
+        OP_RETURN_187 if vault => "OP_VAULT".to_string(),
         OP_RETURN_187 => "OP_CHECKCONTRACTVERIFY".to_string(),
+        OP_RETURN_188 => "OP_VAULT_RECOVER".to_string(),
         // rust-bitcoin spells these OP_PUSHNUM_n; every reference and this
         // assembler call them OP_n, and rendering a name the assembler does
         // not take means the disassembly panel cannot be pasted back.
@@ -34,7 +39,7 @@ pub fn op_name(op: Opcode) -> String {
 /// Byte offset and rendered text for each decoded instruction. A decode
 /// failure ends the list with an `<invalid>` marker rather than erroring:
 /// the debugger still wants to show what came before it.
-pub fn instructions(script: &Script) -> Vec<(usize, String)> {
+pub fn instructions(script: &Script, vault: bool) -> Vec<(usize, String)> {
     let mut out = Vec::new();
     for item in script.instruction_indices() {
         match item {
@@ -46,7 +51,7 @@ pub fn instructions(script: &Script) -> Vec<(usize, String)> {
                 };
                 out.push((pos, text));
             }
-            Ok((pos, Instruction::Op(op))) => out.push((pos, op_name(op))),
+            Ok((pos, Instruction::Op(op))) => out.push((pos, op_name(op, vault))),
             Err(_) => {
                 let pos = out
                     .last()
@@ -60,8 +65,8 @@ pub fn instructions(script: &Script) -> Vec<(usize, String)> {
     out
 }
 
-pub fn render(script: &Script) -> String {
-    instructions(script)
+pub fn render(script: &Script, vault: bool) -> String {
+    instructions(script, vault)
         .into_iter()
         .map(|(_, t)| t)
         .collect::<Vec<_>>()
@@ -99,7 +104,7 @@ mod tests {
         ] {
             let once = asm_to_hex(src);
             let script = ScriptBuf::from(Vec::<u8>::from_hex(&once).unwrap());
-            let rendered = render(&script);
+            let rendered = render(&script, false);
             let twice = ScriptBuf::from_asm(&rendered)
                 .unwrap_or_else(|e| panic!("{src} -> {once} -> {rendered:?} did not parse: {e:?}"))
                 .as_bytes()

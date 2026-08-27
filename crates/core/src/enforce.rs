@@ -34,6 +34,10 @@ pub struct Ruleset {
     /// BIP-443 OP_CHECKCONTRACTVERIFY (0xbb).
     #[serde(default)]
     pub ccv: bool,
+    /// BIP-345 OP_VAULT (0xbb) and OP_VAULT_RECOVER (0xbc). Claims the same
+    /// opcode as `ccv`, so at most one of the two can be on.
+    #[serde(default)]
+    pub vault: bool,
 }
 
 impl Default for Ruleset {
@@ -48,6 +52,7 @@ impl Default for Ruleset {
             paircommit: false,
             txhash: false,
             ccv: false,
+            vault: false,
         }
     }
 }
@@ -63,8 +68,12 @@ impl Ruleset {
         paircommit: false,
         txhash: false,
         ccv: false,
+        vault: false,
     };
-    pub const ALL: Ruleset = Ruleset {
+    /// Every deployment that can be on at once, resolving the shared opcode
+    /// in favour of BIP-443. There is no ruleset with both, so "all" has to
+    /// pick one and say which; `ALL_VAULT` is the other side.
+    pub const ALL_CCV: Ruleset = Ruleset {
         ctv: true,
         csfs: true,
         cat: true,
@@ -74,7 +83,27 @@ impl Ruleset {
         paircommit: true,
         txhash: true,
         ccv: true,
+        vault: false,
     };
+    /// `ALL_CCV` with the shared opcode resolved the other way, which is the
+    /// only ruleset under which OP_VAULT_RECOVER is enforced.
+    pub const ALL_VAULT: Ruleset = Ruleset {
+        ccv: false,
+        vault: true,
+        ..Ruleset::ALL_CCV
+    };
+
+    /// BIP-345 and BIP-443 both claim OP_SUCCESS187, so a ruleset with both
+    /// on cannot say which opcode 0xbb is. Callers resolve it; this only
+    /// reports it.
+    pub fn conflict(&self) -> Option<&'static str> {
+        if self.vault && self.ccv {
+            return Some(
+                "OP_VAULT and OP_CHECKCONTRACTVERIFY both use 0xbb, so only one can be enabled",
+            );
+        }
+        None
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -154,10 +183,21 @@ pub fn classify(script: &Script, rules: &Ruleset) -> EnforcementReport {
                     note("OP_INTERNALKEY", Enforcement::Open);
                 }
             }
-            // OP_SUCCESS187: BIP-443 OP_CHECKCONTRACTVERIFY.
+            // OP_SUCCESS187: BIP-443 OP_CHECKCONTRACTVERIFY, or BIP-345
+            // OP_VAULT. The byte does not say which, so it is enforced when
+            // either is on, and both dormant meanings are named when neither
+            // is. Naming one would contradict the disassembly, which reads
+            // the byte as whichever deployment the reader has selected.
             0xbb => {
-                if !rules.ccv {
+                if !rules.ccv && !rules.vault {
                     note("OP_CHECKCONTRACTVERIFY", Enforcement::Open);
+                    note("OP_VAULT", Enforcement::Open);
+                }
+            }
+            // OP_SUCCESS188: BIP-345 OP_VAULT_RECOVER.
+            0xbc => {
+                if !rules.vault {
+                    note("OP_VAULT_RECOVER", Enforcement::Open);
                 }
             }
             // OP_SUCCESS189: BIP-346 OP_TXHASH.
@@ -313,9 +353,36 @@ mod tests {
     }
 
     /// A byte that is OP_SUCCESSx and belongs to no deployment we model.
+    /// The two sides of the shared opcode, so neither reads as anyone-can-
+    /// spend under the ruleset that deploys it. 0xbc collides with nothing,
+    /// but one flag gates both bytes.
+    #[test]
+    fn each_side_of_the_shared_opcode_is_enforced_under_its_own_ruleset() {
+        assert_eq!(
+            classify(&s("bb"), &Ruleset::ALL_CCV).status,
+            Enforcement::Enforced
+        );
+        assert_eq!(
+            classify(&s("bb"), &Ruleset::ALL_VAULT).status,
+            Enforcement::Enforced
+        );
+        assert_eq!(
+            classify(&s("bc"), &Ruleset::ALL_VAULT).status,
+            Enforcement::Enforced
+        );
+        assert!(Ruleset::ALL_CCV.conflict().is_none());
+        assert!(Ruleset::ALL_VAULT.conflict().is_none());
+        assert!(Ruleset {
+            vault: true,
+            ..Ruleset::ALL_CCV
+        }
+        .conflict()
+        .is_some());
+    }
+
     #[test]
     fn an_unmodelled_op_success_is_still_open() {
-        let r = classify(&s("62"), &Ruleset::ALL);
+        let r = classify(&s("62"), &Ruleset::ALL_CCV);
         assert_eq!(r.status, Enforcement::Open);
         assert_eq!(r.inactive, vec!["OP_SUCCESS98"]);
     }

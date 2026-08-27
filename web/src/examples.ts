@@ -10,7 +10,7 @@
 import type { Edge } from "@xyflow/react";
 import type { FlowNode } from "./store";
 import { scriptBlock } from "./script/wrap";
-import { count, type NodeFields } from "./registry";
+import { count, KINDS, type NodeFields } from "./registry";
 import type { Network } from "./engine";
 
 /** A placeholder P2TR scriptPubKey. The witness program is 32 bytes, so
@@ -71,9 +71,9 @@ const MEASURED: Record<string, number> = {
   "template:1:2": 356,
   "taproot:1": 284,
   "taproot:2": 340,
-  "transaction:1:1": 320,
-  "transaction:1:2": 346,
-  execute: 355,
+  "transaction:1:1": 372,
+  "transaction:1:2": 450,
+  execute: 467,
   outpoint: 235,
   key: 175,
   sighash: 377,
@@ -81,6 +81,7 @@ const MEASURED: Record<string, number> = {
   verify: 209,
   text: 175,
   "concat:2": 206,
+  tagged_hash: 179,
   "concat:3": 236,
   sha256: 149,
   input: 149,
@@ -88,8 +89,18 @@ const MEASURED: Record<string, number> = {
   slice: 235,
   le_bytes: 179,
 };
+/** Least a node with `rows` port rows can render at: every row is at least
+ *  26px and the chrome above and below adds more than 60. Exported because
+ *  the table above is measured by hand and has twice been left behind by a
+ *  port added in the registry, which is exactly the case this floor catches:
+ *  a height recorded when the node was shorter falls under it. */
+export const minHeightFor = (rows: number) => rows * ROW + 60;
+
+/** The measured table itself, exported for the same test. */
+export const MEASURED_HEIGHTS: Readonly<Record<string, number>> = MEASURED;
+
 /** The shape key for a node, exported so a test can hold the table to the
- *  browser's real measurements. */
+ *  ports each node actually has. */
 export function shapeOf(d: Record<string, unknown>): string {
   return shape(d);
 }
@@ -118,7 +129,14 @@ function height(n: FlowNode): number {
     const refs = new Set(src.match(/@[A-Za-z_]\w*/g) ?? []).size;
     return TAPSCRIPT_CHROME + Math.round(scriptBlock(src).height) + (refs + 2) * ROW;
   }
-  return MEASURED[shape(d)] ?? 240;
+  const key = shape(d);
+  if (key in MEASURED) return MEASURED[key];
+  // Nobody has measured this shape. Fall back to the floor its own ports
+  // imply rather than one flat number, which boxes a wide node as a small
+  // one and drops it out of its comment.
+  const k = KINDS[String(d.kind)];
+  if (!k) return 240;
+  return minHeightFor(k.inputs(d as NodeFields).length + k.outputs(d as NodeFields).length);
 }
 /** Lane rows for the knot band between two regions: `n` lanes starting
  *  clear of everything placed above, returned with the y the next region
@@ -1171,6 +1189,172 @@ export function hotcold(): Example {
   return { nodes, edges, network: "signet", ruleset: "none" };
 }
 
+// --- OP_VAULT ---------------------------------------------------------------
+
+/** A vault under BIP-345, and the transaction that announces a withdrawal
+ *  from it.
+ *
+ *  The coin sits in a two-leaf taproot. One leaf recovers it to a
+ *  scriptPubKey named only by its hash, so the destination stays private
+ *  until it is used. The other starts a withdrawal: OP_VAULT rebuilds the
+ *  same taptree with its own leaf replaced by a timelocked CTV script, and
+ *  fails unless an output of this transaction is exactly that. The delay and
+ *  the destination are therefore chosen now, long after the coin arrived,
+ *  and the recovery leaf comes through the rewrite untouched, which is what
+ *  leaves the withdrawal interruptible while it waits.
+ */
+export function opvault(): Example {
+  const nodes: FlowNode[] = [];
+
+  const cold = node("cold", "key", col(0), 0, { secret: "22".repeat(32) });
+  const coldLeaf = node("cold_leaf", "tapscript", col(1), 0, {
+    source: ["# Where a recovery sends the coin.", "@cold OP_CHECKSIG"].join("\n"),
+  });
+  const coldOut = node("cold_out", "taproot", col(2), 0, { nLeaves: 1 });
+  // The commitment covers the length as well as the bytes, so a scriptPubKey
+  // cannot be passed off as a longer one that starts the same way. 0x22 is
+  // the CompactSize for the 34 bytes of a P2TR output.
+  const commit = node("commit", "concat", col(3), 0, { nParts: 2, part0: "22" });
+  const rhash = node("rhash", "tagged_hash", col(4), 0, { tag: "VaultRecoverySPK" });
+  const recoverLeaf = node("recover_leaf", "tapscript", col(5), 0, {
+    source: [
+      "# Recovery, at any time. The vault",
+      "# knows the destination by hash only.",
+      "@rhash OP_VAULT_RECOVER",
+    ].join("\n"),
+  });
+
+  const triggerLeaf = node("trigger_leaf", "tapscript", col(5), 300, {
+    source: [
+      "# Start a withdrawal. The two items",
+      "# above are the spend delay and the",
+      "# count of leaf-update pushes; the",
+      "# third is the body they prefix,",
+      "# OP_CSV OP_DROP OP_CTV as data.",
+      "10 2 <b275b3> OP_VAULT",
+    ].join("\n"),
+  });
+
+  const vaultOut = node("vault_out", "taproot", col(6), 60, { nLeaves: 2 });
+
+  const withdraw = node("withdraw", "template", col(3), 640, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 1,
+    // The rewritten leaf's OP_CSV reads this, so the withdrawal cannot
+    // confirm until the delay has run.
+    in0_seq: 10,
+    out0_value: 99_000,
+    out0_spk: p2tr("55"),
+  });
+  const rewrittenLeaf = node("rewritten_leaf", "tapscript", col(4), 640, {
+    source: [
+      "# What OP_VAULT rewrites the trigger",
+      "# leaf into: the same body, now with",
+      "# the withdrawal's hash in front.",
+      "@ctv 10 OP_CHECKSEQUENCEVERIFY OP_DROP",
+      "OP_CHECKTEMPLATEVERIFY",
+    ].join("\n"),
+  });
+  const triggeredOut = node("triggered_out", "taproot", col(6), 640, { nLeaves: 2 });
+
+  const triggerTpl = node("trigger_tpl", "template", col(7), 640, {
+    version: 2,
+    locktime: 0,
+    nIn: 1,
+    nOut: 1,
+    in0_seq: 0xfffffffd,
+    // The whole value has to come through: OP_VAULT will not let a trigger
+    // spend any of it to fees.
+    out0_value: 100_000,
+    out0_spk: "",
+  });
+  const funding = node("funding", "outpoint", col(7), 980, { txid: "f".repeat(64), vout: 0, value: 100_000 });
+  const wit = node("witness", "witness", col(8), 240, {
+    nItems: 4,
+    // Bottom to top: no revault, so an amount of zero and an index of -1;
+    // then the output the trigger lands in; then the hash to lock in.
+    item0: "",
+    item1: "81",
+    item2: "",
+  });
+  const triggerTx = node("trigger_tx", "transaction", col(8), 640, { nIn: 1, nOut: 1 });
+  const run = node("check", "execute", col(9), 420, { input_index: 0 });
+
+  nodes.push(
+    cold,
+    coldLeaf,
+    coldOut,
+    commit,
+    rhash,
+    recoverLeaf,
+    triggerLeaf,
+    vaultOut,
+    withdraw,
+    rewrittenLeaf,
+    triggeredOut,
+    triggerTpl,
+    funding,
+    wit,
+    triggerTx,
+    run,
+  );
+
+  const edges: Edge[] = [
+    wire("cold", "pubkey", "cold_leaf", "ref_cold"),
+    wire("cold_leaf", "script", "cold_out", "leaf0"),
+    wire("cold_out", "spk", "commit", "part1"),
+    wire("commit", "hex", "rhash", "data"),
+    wire("rhash", "hash", "recover_leaf", "ref_rhash"),
+    wire("recover_leaf", "script", "vault_out", "leaf0"),
+    wire("trigger_leaf", "script", "vault_out", "leaf1"),
+    wire("withdraw", "ctv0", "rewritten_leaf", "ref_ctv"),
+    // The same recovery leaf, in both trees. That it is the same is the
+    // whole reason a triggered withdrawal can still be stopped.
+    wire("recover_leaf", "script", "triggered_out", "leaf0"),
+    wire("rewritten_leaf", "script", "triggered_out", "leaf1"),
+    wire("triggered_out", "spk", "trigger_tpl", "out0_spk"),
+    wire("trigger_tpl", "template", "trigger_tx", "template"),
+    wire("funding", "outpoint", "trigger_tx", "prevout0"),
+    wire("funding", "value", "trigger_tx", "value0"),
+    wire("withdraw", "ctv0", "witness", "item3"),
+    wire("trigger_leaf", "script", "witness", "script"),
+    // Leaf 1 is the trigger leaf, so this is the control block that proves
+    // it, and the merkle path in it is what the rewrite is folded back up.
+    wire("vault_out", "control1", "witness", "control"),
+    wire("witness", "witness", "trigger_tx", "witness0"),
+    wire("trigger_leaf", "script", "check", "script"),
+    wire("witness", "witness", "check", "witness"),
+    wire("trigger_tx", "hex", "check", "tx"),
+    wire("vault_out", "spk", "check", "prevout_spk"),
+    wire("funding", "value", "check", "prevout_value"),
+  ];
+
+  nodes.unshift(
+    around("c_cold", "The destination a recovery pays, and its commitment", "teal", nodes, [
+      "cold",
+      "cold_leaf",
+      "cold_out",
+      "commit",
+      "rhash",
+    ]),
+    around("c_vault", "The vault: recover at any time, or start a withdrawal", "amber", nodes, [
+      "recover_leaf",
+      "trigger_leaf",
+      "vault_out",
+    ]),
+    around("c_after", "What the withdrawal must become", "blue", nodes, [
+      "withdraw",
+      "rewritten_leaf",
+      "triggered_out",
+    ]),
+    around("c_trigger", "Announcing it", "slate", nodes, ["trigger_tpl", "funding", "witness", "trigger_tx", "check"]),
+  );
+
+  return { nodes, edges, network: "signet", ruleset: "ctv+vault" };
+}
+
 // --- recursive covenant with OP_CAT ------------------------------------------
 
 /** A coin that can only ever be spent back into itself.
@@ -1557,6 +1741,7 @@ export interface ExampleEntry {
 export const EXAMPLE_GROUPS: Array<{ title: string; keys: string[] }> = [
   { title: "Taproot, with no covenant at all", keys: ["hotcold"] },
   { title: "CTV · commit to the next transaction", keys: ["vault", "pool"] },
+  { title: "OP_VAULT · rewrite one leaf of the tree", keys: ["opvault"] },
   { title: "CSFS · check a signature over a message", keys: ["delegation", "oracle"] },
   { title: "Rebindable signatures", keys: ["bip448", "eltoo"] },
   { title: "CAT · take bytes apart and put them back", keys: ["merkle", "catonly", "recursive"] },
@@ -1569,6 +1754,13 @@ export const EXAMPLES: Record<string, ExampleEntry> = {
     blurb: "Two leaves, one spendable now and one after a delay",
     needs: "none",
     build: hotcold,
+  },
+  opvault: {
+    label: "OP_VAULT",
+    name: "op_vault",
+    blurb: "Announce a withdrawal by rewriting one leaf, and keep the way to stop it",
+    needs: "BIP-345",
+    build: opvault,
   },
   vault: {
     label: "Vault",

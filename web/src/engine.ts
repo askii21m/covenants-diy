@@ -20,7 +20,24 @@ export const FLAGS: Array<{ id: keyof Ruleset; label: string; bip: string }> = [
   { id: "paircommit", label: "OP_PAIRCOMMIT", bip: "BIP 442" },
   { id: "txhash", label: "OP_TXHASH", bip: "BIP 346" },
   { id: "ccv", label: "OP_CHECKCONTRACTVERIFY", bip: "BIP 443" },
+  { id: "vault", label: "OP_VAULT", bip: "BIP 345" },
 ];
+
+/** Pairs that claim the same opcode byte, so at most one can be on.
+ *  OP_VAULT and OP_CHECKCONTRACTVERIFY are both OP_SUCCESS187. */
+const EXCLUSIVE: Array<[keyof Ruleset, keyof Ruleset]> = [["ccv", "vault"]];
+
+/** Set one switch, clearing whatever it cannot share a byte with. */
+export function toggle(flags: Ruleset, id: keyof Ruleset): Ruleset {
+  const next = { ...flags, [id]: !flags[id] };
+  if (next[id]) {
+    for (const [a, b] of EXCLUSIVE) {
+      if (a === id) next[b] = false;
+      else if (b === id) next[a] = false;
+    }
+  }
+  return next;
+}
 
 /** Every flag off, then whatever is asked for. Built from FLAGS rather
  *  than written out, because a field left off here reads as undefined
@@ -60,6 +77,12 @@ export const PRESETS: Array<{
   { label: "APO", hint: "BIP 118", group: "Proposed", on: ["apo"] },
   { label: "TXHASH", hint: "BIP 346", group: "Proposed", on: ["txhash"] },
   { label: "CCV", hint: "BIP 443", group: "Proposed", on: ["ccv"] },
+  {
+    label: "OP_VAULT",
+    hint: "BIP 345 + BIP 119",
+    group: "Proposed",
+    on: ["vault", "ctv"],
+  },
   { label: "mainnet today", hint: "none of them", group: "Running", on: [] },
   { label: "Inquisition signet", hint: "CTV, CSFS, CAT and APO", group: "Running", on: ["ctv", "csfs", "cat", "apo"] },
 ];
@@ -95,13 +118,25 @@ export function flagsOf(ruleset: string): Ruleset {
   if (Object.hasOwn(LEGACY, ruleset)) return on(LEGACY[ruleset]);
   const parts = ruleset.split("+");
   const known = FLAGS.map((f) => String(f.id));
-  return parts.every((p) => known.includes(p)) ? on(parts as Array<keyof Ruleset>) : on([]);
+  if (!parts.every((p) => known.includes(p))) return on([]);
+  // Two opcodes sharing a byte is not a ruleset any node could run, so it
+  // falls back here as well as at the load gate. This is the one funnel
+  // every caller goes through, the presets included.
+  if (EXCLUSIVE.some(([a, b]) => parts.includes(a) && parts.includes(b))) return on([]);
+  return on(parts as Array<keyof Ruleset>);
 }
 
 /** Whether a string names something this build understands, which is what
  *  decides if a link's ruleset survives or falls back. */
-export const isRuleset = (s: string): boolean =>
-  Object.hasOwn(LEGACY, s) || s.split("+").every((p) => FLAGS.some((f) => f.id === p));
+export const isRuleset = (s: string): boolean => {
+  if (Object.hasOwn(LEGACY, s)) return true;
+  const parts = s.split("+");
+  if (!parts.every((p) => FLAGS.some((f) => f.id === p))) return false;
+  // A link naming two opcodes that share a byte does not describe a ruleset
+  // any node could run, so it falls back rather than being resolved by
+  // whichever one this build happens to check first.
+  return !EXCLUSIVE.some(([a, b]) => parts.includes(a) && parts.includes(b));
+};
 
 /** What the header shows for a set of switches. */
 export function summaryOf(flags: Ruleset): string {
@@ -112,7 +147,7 @@ export function summaryOf(flags: Ruleset): string {
   return set.length <= 2 ? set.map((f) => shortLabel(f.id)).join(" + ") : `${set.length} of ${FLAGS.length}`;
 }
 
-const shortLabel = (id: keyof Ruleset) =>
+export const shortLabel = (id: keyof Ruleset) =>
   ({
     ctv: "CTV",
     csfs: "CSFS",
@@ -123,6 +158,7 @@ const shortLabel = (id: keyof Ruleset) =>
     paircommit: "PAIRCOMMIT",
     txhash: "TXHASH",
     ccv: "CCV",
+    vault: "VAULT",
   })[id];
 
 export const NETWORKS = ["signet", "regtest"] as const;

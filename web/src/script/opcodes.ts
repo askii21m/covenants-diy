@@ -116,6 +116,10 @@ export const DESCRIPTIONS: Record<string, string> = {
     "Pop a TxFieldSelector and push a hash of the fields it names. The empty selector matches what CTV covers; others give the BIP-341 and BIP-118 sighash modes, or feed OP_CHECKSIGFROMSTACK. BIP-346.",
   OP_CHECKCONTRACTVERIFY:
     "Fail unless the input or output at the given index is a key tweaked by data, then by a script tree. Stack: data, index, key, taptree, mode. A coin can require it moves into the same program with new state. BIP-443.",
+  OP_VAULT:
+    "Fail unless the output at the given index carries this input's taptree with the running leaf rewritten. Stack: revault amount, revault index, trigger index, leaf items, item count, leaf body. Announces a withdrawal whose delay and destination are picked now rather than when the coin arrived. Shares its byte with OP_CHECKCONTRACTVERIFY, so only one of the two can be on. BIP-345.",
+  OP_VAULT_RECOVER:
+    "Fail unless the output at the given index pays the scriptPubKey the vault committed to, named here only by its hash. Stack: index, hash. It survives the rewrite OP_VAULT makes, which is what leaves a withdrawal interruptible while it waits out its delay. BIP-345.",
 
   // op_success
   OP_SUBSTR: "Disabled before taproot.",

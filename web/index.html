@@ -55,7 +55,8 @@
           "OP_INTERNALKEY (BIP 349)",
           "OP_PAIRCOMMIT (BIP 442)",
           "OP_TXHASH (BIP 346)",
-          "OP_CHECKCONTRACTVERIFY (BIP 443)"
+          "OP_CHECKCONTRACTVERIFY (BIP 443)",
+          "OP_VAULT (BIP 345)"
         ]
       }
     </script>
@@ -168,12 +169,16 @@
           Signet and regtest only.
         </p>
         <h2>Covenant opcodes</h2>
-        <p class="ops">CTV · CSFS · CAT · APO · TEMPLATEHASH · INTERNALKEY · PAIRCOMMIT · TXHASH · CCV</p>
+        <p class="ops">CTV · CSFS · CAT · APO · TEMPLATEHASH · INTERNALKEY · PAIRCOMMIT · TXHASH · CCV · VAULT</p>
         <h2>Worked examples</h2>
         <ul class="ex">
           <li><b>Hot and cold</b><span>Two leaves, one spendable now and one after a delay</span><em>taproot</em></li>
           <li><b>Vault</b><span>A delay to notice a theft, and a cold path to stop it</span><em>BIP-119</em></li>
           <li><b>Congestion control</b><span>One transaction commits to a tree of payouts</span><em>BIP-119</em></li>
+          <li>
+            <b>OP_VAULT</b><span>Announce a withdrawal by rewriting one leaf, and keep the way to stop it</span
+            ><em>BIP-345</em>
+          </li>
           <li><b>Delegation</b><span>Hand someone one spend without handing them your key</span><em>BIP-348</em></li>
           <li>
             <b>Oracle payout</b><span>An attestation decides whether, never where</span><em>BIP-348 + BIP-119</em>

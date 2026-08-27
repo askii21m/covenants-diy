@@ -86,6 +86,23 @@ pub struct Deployments {
     pub txhash: bool,
     /// BIP-443 OP_CHECKCONTRACTVERIFY (0xbb, tapscript only).
     pub ccv: bool,
+    /// BIP-345 OP_VAULT and OP_VAULT_RECOVER (0xbb and 0xbc, tapscript
+    /// only). Shares 0xbb with BIP-443, so the two cannot both be on.
+    pub vault: bool,
+}
+
+impl Deployments {
+    /// BIP-345 and BIP-443 both claim OP_SUCCESS187, so a run with both on
+    /// would have to guess which opcode 0xbb is. Callers resolve it; this
+    /// only reports it.
+    pub fn conflict(&self) -> Option<&'static str> {
+        if self.vault && self.ccv {
+            return Some(
+                "OP_VAULT and OP_CHECKCONTRACTVERIFY both use 0xbb, so only one can be enabled",
+            );
+        }
+        None
+    }
 }
 
 impl Default for Deployments {
@@ -100,6 +117,11 @@ impl Default for Deployments {
             paircommit: true,
             txhash: true,
             ccv: true,
+            // OP_VAULT wants the same opcode CHECKCONTRACTVERIFY has, so
+            // only one of them can be on and this picks the one that was
+            // here first. Setting it here does not clear the other: build
+            // the pair explicitly, and Exec::new refuses the contradiction.
+            vault: false,
         }
     }
 }
@@ -165,6 +187,23 @@ impl CcvTxState {
     }
 }
 
+/// What BIP-345's deferred checks have accumulated so far. The opcode
+/// queues its amount checks and a node runs them once every input has been
+/// evaluated, so an interpreter that runs one input at a time has to be
+/// handed what earlier inputs left and hand on what it added.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct VaultTxState {
+    /// Least each output must carry, summed over the inputs that said so.
+    pub output_min_amount: Vec<u64>,
+}
+
+impl VaultTxState {
+    fn sized(mut self, n: usize) -> Self {
+        self.output_min_amount.resize(n, 0);
+        self
+    }
+}
+
 pub struct TxTemplate {
     pub tx: Transaction,
     pub prevouts: Vec<TxOut>,
@@ -189,6 +228,10 @@ pub struct TxTemplate {
     /// BIP-443's amount rules. Absent means this is the first input, or the
     /// caller is not modelling the others.
     pub ccv_state: Option<CcvTxState>,
+    /// What earlier inputs of this transaction already accumulated under
+    /// BIP-345's deferred checks. Absent means this is the first input, or
+    /// the caller is not modelling the others.
+    pub vault_state: Option<VaultTxState>,
     /// Value of the coin this input spends, when the caller knows it.
     /// Distinct from `prevouts`, which a caller may fill with placeholders
     /// to satisfy hashing: BIP-443's amount rules are only meaningful over
@@ -286,6 +329,7 @@ pub struct Exec {
     ccv_output_checked_default: Vec<bool>,
     ccv_output_checked_deduct: Vec<bool>,
     ccv_residual_input_amount: Option<u64>,
+    vault_output_min_amount: Vec<u64>,
     // Set when an opcode succeeds the input outright rather than failing or
     // continuing, which BIP-443 does for a mode it does not define.
     succeed_now: bool,
@@ -312,6 +356,11 @@ impl Exec {
         script: ScriptBuf,
         script_witness: Vec<Vec<u8>>,
     ) -> Result<Exec, Error> {
+        // Two deployments claiming one byte cannot both be evaluated, and
+        // picking one silently would report a covenant the script never had.
+        if let Some(clash) = opt.deployments.conflict() {
+            return Err(Error::Other(clash));
+        }
         if ctx == ExecCtx::Tapscript {
             if tx.taproot_annex_scriptleaf.is_none() {
                 return Err(Error::Other("missing taproot tx info in tapscript context"));
@@ -382,6 +431,7 @@ impl Exec {
 
         let n_outputs = tx.tx.output.len();
         let carried = tx.ccv_state.clone().unwrap_or_default().sized(n_outputs);
+        let carried_vault = tx.vault_state.clone().unwrap_or_default().sized(n_outputs);
         // The residual starts at the whole amount this input is spending,
         // and stays unknown when the caller could not say what that is.
         let residual = tx.input_amount;
@@ -405,6 +455,7 @@ impl Exec {
             ccv_output_checked_default: carried.output_checked_default,
             ccv_output_checked_deduct: carried.output_checked_deduct,
             ccv_residual_input_amount: residual,
+            vault_output_min_amount: carried_vault.output_min_amount,
             succeed_now: false,
             last_codeseparator_pos: None,
             opcode_pos: 0,
@@ -1272,6 +1323,162 @@ impl Exec {
                 self.stack.pushstr(&hash);
             }
 
+            // BIP-345. Spends a vault leaf into an output whose taptree is
+            // this input's tree with the executing leaf rewritten, which is
+            // how a spend delay and a destination picked now get locked in
+            // without having been known when the coin was received. Stack,
+            // top to bottom, is <leaf-update-script-body> <push-count>
+            // [push-count items] <trigger-vout-idx> <revault-vout-idx>
+            // <revault-amount>, and a true is left in their place.
+            OP_RETURN_187 if self.ctx == ExecCtx::Tapscript && self.opt.deployments.vault => {
+                use covenants_core::vault;
+
+                // Rewriting the leaf costs an EC multiplication and hashing
+                // over the control block, which BIP-345 prices at 60.
+                self.validation_weight -= vault::VAULT_VALIDATION_WEIGHT;
+                if self.validation_weight < 0 {
+                    return Err(ExecError::TapscriptValidationWeight);
+                }
+
+                self.stack.needn(5)?;
+                let body = self.stack.popstr()?;
+                let push_count = self.stack.popnum(self.opt.require_minimal)?;
+                let push_count =
+                    usize::try_from(push_count).map_err(|_| ExecError::VaultParameter)?;
+                if self.stack.len() < push_count + 3 {
+                    return Err(ExecError::VaultParameter);
+                }
+
+                // Popped top first, so reversing puts them in the order
+                // their pushes take in the finished leaf.
+                let mut items = Vec::with_capacity(push_count);
+                for _ in 0..push_count {
+                    items.push(self.stack.popstr()?);
+                }
+                items.reverse();
+
+                let trigger_idx = self.stack.popnum(self.opt.require_minimal)?;
+                let revault_idx = self.stack.popnum(self.opt.require_minimal)?;
+                // Seven bytes, so the whole money supply fits in the number.
+                let revault_amount_raw = self.stack.popstr()?;
+                let revault_amount = read_scriptint(
+                    &revault_amount_raw,
+                    vault::VAULT_MAX_AMOUNT_SIZE,
+                    self.opt.require_minimal,
+                )?;
+
+                let n_outputs = self.tx.tx.output.len();
+                let trigger_idx = usize::try_from(trigger_idx)
+                    .ok()
+                    .filter(|i| *i < n_outputs)
+                    .ok_or(ExecError::VaultIndexOutOfBounds)?;
+                // Only -1 says there is no revault. Were any negative
+                // allowed, the witness could be bloated while the spend
+                // waits for confirmation without changing what it means.
+                if revault_idx < -1 || revault_amount < 0 {
+                    return Err(ExecError::VaultParameter);
+                }
+                if (revault_amount == 0) != (revault_idx == -1) {
+                    return Err(ExecError::VaultParameter);
+                }
+
+                let input_amount = self.tx.input_amount.ok_or(ExecError::VaultAmountUnknown)?;
+                let revault_amount = revault_amount as u64;
+                if revault_amount > input_amount {
+                    return Err(ExecError::VaultRevault);
+                }
+
+                let control_block = self
+                    .tx
+                    .control_block
+                    .as_deref()
+                    .ok_or(ExecError::VaultControlBlockMissing)?;
+
+                // A node proves the control block commits to the coin before
+                // any script runs, so BIP-345 can say "the taptree of the
+                // currently evaluated input" and mean it. Nothing here has
+                // done that yet, and the merkle path is what the rewrite is
+                // folded up: an unrelated control block would otherwise have
+                // the opcode check the output against an unrelated tree.
+                let input_spk = &self
+                    .tx
+                    .prevouts
+                    .get(self.tx.input_idx)
+                    .ok_or(ExecError::VaultIndexOutOfBounds)?
+                    .script_pubkey;
+                if input_spk.is_empty() {
+                    return Err(ExecError::VaultPrevoutMissing);
+                }
+                let current = vault::expected_trigger_output_key(control_block, self.script)
+                    .map_err(ExecError::VaultKey)?;
+                if input_spk.as_bytes() != vault::p2tr_script_pubkey(&current).as_bytes() {
+                    return Err(ExecError::VaultControlBlockMismatch);
+                }
+
+                let new_leaf =
+                    vault::leaf_update_script(&items, &body).map_err(ExecError::VaultKey)?;
+                let expected = vault::expected_trigger_output_key(control_block, &new_leaf)
+                    .map_err(ExecError::VaultKey)?;
+
+                let trigger_spk = &self.tx.tx.output[trigger_idx].script_pubkey;
+                if !trigger_spk.is_p2tr() {
+                    return Err(ExecError::VaultTriggerType);
+                }
+                if trigger_spk.as_bytes() != vault::p2tr_script_pubkey(&expected).as_bytes() {
+                    return Err(ExecError::VaultTriggerMismatch);
+                }
+
+                let revault_target = if revault_idx >= 0 {
+                    let i = usize::try_from(revault_idx)
+                        .ok()
+                        .filter(|i| *i < n_outputs)
+                        .ok_or(ExecError::VaultIndexOutOfBounds)?;
+                    if self.tx.tx.output[i].script_pubkey.as_bytes() != input_spk.as_bytes() {
+                        return Err(ExecError::VaultRevault);
+                    }
+                    Some(i)
+                } else {
+                    None
+                };
+
+                let mut credits = vec![(trigger_idx, input_amount - revault_amount)];
+                if let Some(i) = revault_target {
+                    credits.push((i, revault_amount));
+                }
+                self.vault_credit(&credits)?;
+
+                self.stack.pushnum(1);
+            }
+
+            // BIP-345. Spends a vault to the recovery scriptPubKey fixed
+            // when the vault was made, named on the stack by its hash so the
+            // destination stays unknown until it is used. Stack, top to
+            // bottom, is <recovery-sPK-hash> <recovery-vout-idx>.
+            OP_RETURN_188 if self.ctx == ExecCtx::Tapscript && self.opt.deployments.vault => {
+                use covenants_core::vault;
+
+                self.stack.needn(2)?;
+                let want = self.stack.popstr()?;
+                if want.len() != 32 {
+                    return Err(ExecError::VaultParameter);
+                }
+                let idx = self.stack.popnum(self.opt.require_minimal)?;
+                let idx = usize::try_from(idx)
+                    .ok()
+                    .filter(|i| *i < self.tx.tx.output.len())
+                    .ok_or(ExecError::VaultIndexOutOfBounds)?;
+
+                let spk = &self.tx.tx.output[idx].script_pubkey;
+                if vault::recovery_spk_hash(spk)[..] != want[..] {
+                    return Err(ExecError::VaultRecoveryMismatch);
+                }
+
+                let input_amount = self.tx.input_amount.ok_or(ExecError::VaultAmountUnknown)?;
+                self.vault_credit(&[(idx, input_amount)])?;
+
+                self.stack.pushnum(1);
+            }
+
             // BIP-443. Checks that an input or output of this transaction is
             // the contract the script names: a naked key tweaked by data,
             // then taptweaked by a tree. Stack, bottom to top, is
@@ -1464,6 +1671,34 @@ impl Exec {
     // STATISTICS //
     ////////////////
 
+    /// What this input leaves for the next one under BIP-345's deferred
+    /// checks. Feed it to the next input's TxTemplate to get the semantics a
+    /// node applies across the whole transaction.
+    pub fn vault_state(&self) -> VaultTxState {
+        VaultTxState {
+            output_min_amount: self.vault_output_min_amount.clone(),
+        }
+    }
+
+    /// Credit outputs under BIP-345's deferred checks. The spec runs these
+    /// once all inputs are in, but the sum only ever grows, so a shortfall
+    /// found now is one the deferred pass would find too.
+    ///
+    /// Nothing is applied until every credit has passed, because the state
+    /// is handed to the next input even when this one fails, and a partial
+    /// credit from a failed input is not a total any node would carry.
+    fn vault_credit(&mut self, credits: &[(usize, u64)]) -> Result<(), ExecError> {
+        let mut next = self.vault_output_min_amount.clone();
+        for (idx, amount) in credits {
+            next[*idx] = next[*idx].saturating_add(*amount);
+            if self.tx.tx.output[*idx].value.to_sat() < next[*idx] {
+                return Err(ExecError::VaultAmount);
+            }
+        }
+        self.vault_output_min_amount = next;
+        Ok(())
+    }
+
     /// What this input leaves for the next one under BIP-443's amount
     /// rules. Feed it to the next input's TxTemplate to get the semantics a
     /// node applies across the whole transaction.
@@ -1589,6 +1824,7 @@ fn scan_tapscript_op_success(script: &Script, deployments: &Deployments) -> Taps
             || (deployments.paircommit && op == 0xcd)
             || (deployments.txhash && op == 0xbd)
             || (deployments.ccv && op == 0xbb)
+            || (deployments.vault && (op == 0xbb || op == 0xbc))
     };
     for instruction in script.instructions() {
         match instruction {

@@ -83,6 +83,7 @@ fn run_tapscript_with(
             full_witness_size: None,
             control_block: None,
             ccv_state: None,
+            vault_state: None,
             taptree_root: None,
             input_amount,
         },
@@ -125,6 +126,7 @@ fn run_with_taptree(
             full_witness_size: None,
             control_block: None,
             ccv_state: None,
+            vault_state: None,
             taptree_root,
             input_amount,
         },
@@ -662,6 +664,7 @@ fn paircommit_disabled_is_op_success() {
         paircommit: false,
         txhash: false,
         ccv: false,
+        vault: false,
         ..Deployments::default()
     };
     let script = Builder::new()
@@ -789,6 +792,7 @@ fn txhash_inactive_is_op_success() {
     let deployments = Deployments {
         txhash: false,
         ccv: false,
+        vault: false,
         ..Default::default()
     };
     let script = Builder::new()
@@ -987,6 +991,7 @@ fn ccv_inactive_is_op_success() {
     let (tx, prevouts) = fixture(1, 1);
     let deployments = Deployments {
         ccv: false,
+        vault: false,
         ..Default::default()
     };
     let script = Builder::new()
@@ -1049,6 +1054,7 @@ fn ccv_refuses_an_amount_rule_without_an_amount() {
                 full_witness_size: None,
                 control_block: None,
                 ccv_state: None,
+                vault_state: None,
                 taptree_root: None,
                 input_amount: None,
             },
@@ -1086,6 +1092,7 @@ fn ccv_without_an_amount_still_checks_the_program() {
             full_witness_size: None,
             control_block: None,
             ccv_state: None,
+            vault_state: None,
             taptree_root: None,
             input_amount: None,
         },
@@ -1300,6 +1307,7 @@ fn ccv_amounts_accumulate_across_inputs_when_threaded() {
                 full_witness_size: None,
                 control_block: None,
                 ccv_state: carry,
+                vault_state: None,
                 taptree_root: None,
                 input_amount: Some(prevouts[idx].value.to_sat()),
             },
@@ -1348,6 +1356,7 @@ fn ccv_is_counted_as_unpriced() {
             full_witness_size: None,
             control_block: None,
             ccv_state: None,
+            vault_state: None,
             taptree_root: None,
             input_amount,
         },

@@ -52,7 +52,8 @@ describe("OP_CHECKCONTRACTVERIFY", () => {
     expect(wasm.classify("bb", ALL).status).toBe("enforced");
     const off = wasm.classify("bb", OFF);
     expect(off.status).toBe("open");
-    expect(off.inactive).toEqual(["OP_CHECKCONTRACTVERIFY"]);
+    // 0xbb is OP_VAULT too, and with neither deployed both are dormant.
+    expect(off.inactive).toEqual(["OP_CHECKCONTRACTVERIFY", "OP_VAULT"]);
   });
 
   // The guard OP_TXHASH shipped without: BIP-342 scans for OP_SUCCESSx
