@@ -786,13 +786,19 @@ textarea {
 }
 /* An input dot says whether the node needs the value: filled for one it
    cannot compute without, hollow for one it can, half for one needed only
-   under the condition the title gives. */
+   under the condition the title gives.
+   The fill stops a pixel short of the edge so the ring, which carries the
+   port type, is still a ring. Filling to the edge loses it entirely on the
+   types that have no colour of their own and so border in --t3, which is
+   the same grey the fill uses. */
 .cov .r.in .p {
   left: -6px;
   background: var(--t3);
+  box-shadow: inset 0 0 0 1px var(--surface);
 }
 .cov .r.in .p.opt {
   background: var(--surface);
+  box-shadow: none;
 }
 .cov .r.in .p.cond {
   background: linear-gradient(to right, var(--t3) 0 50%, var(--surface) 50% 100%);
