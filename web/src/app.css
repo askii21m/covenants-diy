@@ -1892,6 +1892,10 @@ textarea {
 }
 .menu-item kbd {
   flex: none;
+  /* A BIP number carries a hyphen, and a hyphen is a break opportunity, so
+     the column this sits in shrank to the width of "BIP-" and broke the tag
+     across three lines. */
+  white-space: nowrap;
 }
 .menu-item:hover,
 .menu-item.cur {

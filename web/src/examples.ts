@@ -1737,9 +1737,12 @@ export interface ExampleEntry {
 /** Grouped by what the construction does, which is the axis a reader is
  *  choosing along. Grouping by proposal instead put the two vaults in
  *  different groups, where the thing worth comparing was how each one is
- *  built, and left the badge repeating the heading on every row. */
+ *  built, and left the badge repeating the heading on every row.
+ *
+ *  The first group names a property rather than an action on purpose: what
+ *  makes it worth reading first is that it needs no proposal at all. */
 export const EXAMPLE_GROUPS: Array<{ title: string; keys: string[] }> = [
-  { title: "Start here", keys: ["hotcold"] },
+  { title: "Taproot, with no covenant", keys: ["hotcold"] },
   { title: "Commit to the next transaction", keys: ["vault", "opvault", "pool"] },
   { title: "Sign a message, not a transaction", keys: ["delegation", "oracle"] },
   { title: "Rebind a signature", keys: ["bip448", "eltoo"] },
@@ -1786,7 +1789,7 @@ export const EXAMPLES: Record<string, ExampleEntry> = {
     label: "Oracle payout",
     name: "oracle payout",
     blurb: "An attestation decides whether, never where",
-    needs: "BIP-348 + BIP-119",
+    needs: "BIP-348 + 119",
     build: oracle,
   },
   bip448: {
@@ -1821,7 +1824,7 @@ export const EXAMPLES: Record<string, ExampleEntry> = {
     label: "Recursive covenant",
     name: "recursive covenant",
     blurb: "A coin that can only be spent back into itself",
-    needs: "BIP-347 + BIP-348",
+    needs: "BIP-347 + 348",
     build: recursive,
   },
 };
