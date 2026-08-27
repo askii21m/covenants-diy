@@ -22,10 +22,11 @@ export interface MenuItem {
   keepOpen?: boolean;
 }
 
-/** The gap between a panel and its submenu, and the padding inside a panel,
- *  which is what the first submenu row has to be lifted by to sit level
- *  with the row that opened it. Both match app.css. */
-const GAP = 4;
+/** A submenu butts against the panel that opened it, so the two read as
+ *  one surface rather than two things that happen to be near each other. */
+const GAP = 0;
+/** The padding inside a panel, which is what the first submenu row has to
+ *  be lifted by to sit level with the row that opened it. Matches app.css. */
 const PAD = 6;
 
 const live = (items: MenuItem[]) =>
@@ -123,9 +124,8 @@ export function ContextMenu({
     // panel's padding, so hanging the submenu from it puts the submenu on
     // top of the parent's border. Its first item lines up with the row that
     // opened it, and it flips to the left when there is no room on the right.
-    const w = 300,
-      h = Math.min(list.length * 30 + 12, window.innerHeight - 16);
-    const x = box.right + GAP + w > window.innerWidth - 8 ? Math.max(8, box.left - GAP - w) : box.right + GAP;
+    const h = Math.min(list.length * 30 + 12, window.innerHeight - 16);
+    const x = box.right + GAP;
     const y = Math.max(8, Math.min(row.top - PAD, window.innerHeight - 8 - h));
     setOpen([...openRef.current.slice(0, d), { at, x, y }]);
     setCursors([...cursorsRef.current.slice(0, d + 1), -1]);
@@ -264,6 +264,28 @@ export function ContextMenu({
     const r = ref.current?.getBoundingClientRect();
     if (r) setPos(clampToViewport(x, y, r.width, r.height));
   }, [x, y, items.length]);
+
+  // Panels always open rightward, and a cascade too wide for the window
+  // slides left as a whole rather than folding the last panel back over the
+  // ones that opened it. A panel has no width until it has rendered and the
+  // CSS lets one run to 400px, so this can only be settled here.
+  useLayoutEffect(() => {
+    if (!open.length) return;
+    const root = panels.current[0]?.getBoundingClientRect();
+    if (!root) return;
+    let right = root.right;
+    for (let k = 0; k < open.length; k++) {
+      const b = panels.current[k + 1]?.getBoundingClientRect();
+      if (b) right = Math.max(right, b.right);
+    }
+    // Only as far as the root can go without leaving the window itself.
+    const shift = Math.min(right - (window.innerWidth - 8), root.left - 8);
+    if (shift <= 0) return;
+    setPos((p) => ({ ...p, x: p.x - shift }));
+    setOpen(open.map((lv) => ({ at: lv.at, x: lv.x - shift, y: lv.y })));
+    // setOpen and setPos are rebuilt every render; listing them would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const panelRows = (d: number, list: MenuItem[]) =>
     list.map((it, i) =>

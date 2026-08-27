@@ -429,21 +429,20 @@ export default function App() {
   // the tab strip, which are the same act from two places.
   const newItems: MenuItem[] = [
     { label: "Empty canvas", onClick: openBlank },
-    // A panel per group rather than one list of eleven with a blurb under
-    // each: the blurbs are what makes an example worth picking, and a menu
-    // long enough to scroll is a menu nobody reads to the end of.
-    {
-      label: "Examples",
-      submenu: EXAMPLE_GROUPS.map(({ title, keys }) => ({
-        label: title,
-        submenu: keys.map((k) => ({
-          label: EXAMPLES[k].label,
-          detail: EXAMPLES[k].blurb,
-          shortcut: EXAMPLES[k].needs,
-          onClick: () => openExample(k),
-        })),
+    { separator: true, label: "" },
+    // A heading rather than a row that opens a panel: an "Examples" row cost
+    // a whole panel to carry one item, and four panels of this width run off
+    // the side of a narrow window.
+    { label: "Examples", heading: true },
+    ...EXAMPLE_GROUPS.map(({ title, keys }) => ({
+      label: title,
+      submenu: keys.map((k) => ({
+        label: EXAMPLES[k].label,
+        detail: EXAMPLES[k].blurb,
+        shortcut: EXAMPLES[k].needs,
+        onClick: () => openExample(k),
       })),
-    },
+    })),
   ];
 
   const fileItems: MenuItem[] = [
