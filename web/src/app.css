@@ -640,7 +640,14 @@ textarea {
 .cov .r .l {
   color: var(--t2);
   font-size: 12.5px;
-  width: 84px;
+  /* A floor, not a width: 84px lines the value fields up across rows, and a
+     label wider than that grows instead of being cut. Every label here is
+     one we chose, so a truncated one is the node failing to say what a port
+     is: "hash type byte" lost its last word to a 0.3px overflow. The cap is
+     far above anything in the registry and only stops a pathological label
+     squeezing the value out. */
+  min-width: 84px;
+  max-width: 132px;
   flex: none;
   white-space: nowrap;
   overflow: hidden;
