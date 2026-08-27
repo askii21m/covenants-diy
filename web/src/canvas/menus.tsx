@@ -79,53 +79,80 @@ export function ContextMenu({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const uid = useId();
-  const rows = useRef<(HTMLButtonElement | null)[]>([]);
-  // Cursors live in refs as well as state, so two keys in one tick
+  /** The panel element and its rows, per level, level 0 being the root. */
+  const panels = useRef<(HTMLDivElement | null)[]>([]);
+  const rows = useRef<(HTMLButtonElement | null)[][]>([]);
+  // State lives in refs as well as in state, so two keys in one tick
   // (ArrowDown then Enter) see each other.
-  const [cursor, setCursorState] = useState(-1);
-  const cursorRef = useRef(-1);
-  const setCursor = (i: number) => {
-    cursorRef.current = i;
-    setCursorState(i);
+  /** One entry per open submenu, outermost first: the row that opened it and
+   *  where its panel sits. Panel `d + 1` is described by `open[d]`. */
+  type Sub = { at: number; x: number; y: number };
+  const [open, setOpenState] = useState<Sub[]>([]);
+  const openRef = useRef<Sub[]>([]);
+  const setOpen = (v: Sub[]) => {
+    openRef.current = v;
+    setOpenState(v);
   };
-  const [sub, setSubState] = useState<{ at: number; x: number; y: number } | null>(null);
-  const subRef = useRef<{ at: number; x: number; y: number } | null>(null);
-  const setSub = (v: { at: number; x: number; y: number } | null) => {
-    subRef.current = v;
-    setSubState(v);
-  };
-  const [subCursor, setSubCursorState] = useState(-1);
-  const subCursorRef = useRef(-1);
-  const setSubCursor = (i: number) => {
-    subCursorRef.current = i;
-    setSubCursorState(i);
+  /** The cursor in each panel, so the arrows resume where they left off. */
+  const [cursors, setCursorsState] = useState<number[]>([-1]);
+  const cursorsRef = useRef<number[]>([-1]);
+  const setCursors = (v: number[]) => {
+    cursorsRef.current = v;
+    setCursorsState(v);
   };
 
-  const top = useMemo(() => live(items), [items]);
-  const kids = sub ? (items[sub.at]?.submenu ?? []) : [];
-  // kids is a fresh array each render, so this memo is keyed on the panel that
-  // is open rather than on the array identity.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const inner = useMemo(() => live(kids), [sub?.at, items]);
+  /** What each panel shows, walked down from the root. A submenu that is no
+   *  longer there ends the walk rather than leaving a panel with no items. */
+  const lists = useMemo(() => {
+    const out: MenuItem[][] = [items];
+    for (const lv of open) {
+      const next = out[out.length - 1][lv.at]?.submenu;
+      if (!next) break;
+      out.push(next);
+    }
+    return out;
+  }, [items, open]);
 
-  // Off the panel's outer edge, not the row's: a row is inset by the
-  // panel's padding, so hanging the submenu from it puts the submenu on
-  // top of the parent's border. Its first item lines up with the row that
-  // opened it, and it flips to the left when there is no room on the right.
-  const openSub = (at: number) => {
-    const row = rows.current[at]?.getBoundingClientRect();
-    const box = ref.current?.getBoundingClientRect();
-    const list = items[at]?.submenu;
-    if (!row || !box || !list) return;
+  /** Open the submenu of row `at` in panel `d`, closing anything deeper. */
+  const openSub = (d: number, at: number) => {
+    const box = panels.current[d]?.getBoundingClientRect();
+    const row = rows.current[d]?.[at]?.getBoundingClientRect();
+    const list = listsNow()[d]?.[at]?.submenu;
+    if (!box || !row || !list) return;
+    // Off the panel's outer edge, not the row's: a row is inset by the
+    // panel's padding, so hanging the submenu from it puts the submenu on
+    // top of the parent's border. Its first item lines up with the row that
+    // opened it, and it flips to the left when there is no room on the right.
     const w = 300,
       h = Math.min(list.length * 30 + 12, window.innerHeight - 16);
     const x = box.right + GAP + w > window.innerWidth - 8 ? Math.max(8, box.left - GAP - w) : box.right + GAP;
-    setSub({ at, x, y: Math.max(8, Math.min(row.top - PAD, window.innerHeight - 8 - h)) });
-    setSubCursor(-1);
+    const y = Math.max(8, Math.min(row.top - PAD, window.innerHeight - 8 - h));
+    setOpen([...openRef.current.slice(0, d), { at, x, y }]);
+    setCursors([...cursorsRef.current.slice(0, d + 1), -1]);
   };
 
-  const state = useRef({ top, inner, onClose, items, openSub });
-  state.current = { top, inner, onClose, items, openSub };
+  /** Close every panel deeper than `d`. */
+  const closeBelow = (d: number) => {
+    setOpen(openRef.current.slice(0, d));
+    setCursors(cursorsRef.current.slice(0, d + 1));
+  };
+
+  /** The panels as they stand this instant, walked from the ref rather than
+   *  from state, so two keys in one tick (ArrowRight then ArrowDown) see
+   *  each other instead of the second one landing on the panel the first
+   *  just left. */
+  const listsNow = () => {
+    const out: MenuItem[][] = [state.current.items];
+    for (const lv of openRef.current) {
+      const next = out[out.length - 1][lv.at]?.submenu;
+      if (!next) break;
+      out.push(next);
+    }
+    return out;
+  };
+
+  const state = useRef({ items, onClose, openSub, closeBelow, listsNow });
+  state.current = { items, onClose, openSub, closeBelow, listsNow };
 
   // A menu takes focus while it is open and gives it back on close, so a
   // field keeps its own keys when it has them and the menu has them
@@ -151,14 +178,21 @@ export function ContextMenu({
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
-      const { top, inner, onClose, openSub } = state.current;
+      const { onClose, openSub, closeBelow, listsNow } = state.current;
+      const lists = listsNow();
       // Browser shortcuts stay the browser's: swallowing \u2318D without
       // preventing it opened the bookmark dialog with a menu on screen.
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       e.stopImmediatePropagation();
+      // The deepest open panel takes the keys, and Escape or ArrowLeft hands
+      // them back one level at a time rather than closing the lot.
+      const d = lists.length - 1;
+      const here = live(lists[d]);
+      const at = cursorsRef.current[d] ?? -1;
+      const hit = here.find(({ i }) => i === at);
       if (e.key === "Escape") {
         e.preventDefault();
-        if (subRef.current) setSub(null);
+        if (d > 0) closeBelow(d - 1);
         else onClose();
         return;
       }
@@ -167,66 +201,39 @@ export function ContextMenu({
         onClose();
         return;
       }
-      // An open panel takes the arrows; ArrowLeft hands them back.
-      if (subRef.current) {
-        if (e.key === "ArrowLeft") {
+      if (e.key === "ArrowLeft") {
+        if (d > 0) {
           e.preventDefault();
-          setSub(null);
-          return;
-        }
-        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-          e.preventDefault();
-          if (!inner.length) return;
-          setSubCursor(
-            inner[
-              step(
-                inner,
-                inner.findIndex(({ i }) => i === subCursorRef.current),
-                e.key,
-              )
-            ].i,
-          );
-          return;
-        }
-        if (e.key === "Enter" || e.key === " ") {
-          const hit = inner.find(({ i }) => i === subCursorRef.current);
-          if (hit) {
-            e.preventDefault();
-            hit.it.onClick?.();
-            if (!hit.it.keepOpen) onClose();
-          }
-          return;
+          closeBelow(d - 1);
         }
         return;
       }
       if (e.key === "ArrowDown" || e.key === "ArrowUp") {
         e.preventDefault();
-        if (!top.length) return;
-        setCursor(
-          top[
+        if (!here.length) return;
+        const next =
+          here[
             step(
-              top,
-              top.findIndex(({ i }) => i === cursorRef.current),
+              here,
+              here.findIndex(({ i }) => i === at),
               e.key,
             )
-          ].i,
-        );
+          ].i;
+        setCursors([...cursorsRef.current.slice(0, d), next]);
         return;
       }
       if (e.key === "ArrowRight") {
-        const hit = top.find(({ i }) => i === cursorRef.current);
         if (hit?.it.submenu) {
           e.preventDefault();
-          openSub(hit.i);
+          openSub(d, hit.i);
         }
         return;
       }
       if (e.key === "Enter" || e.key === " ") {
-        const hit = top.find(({ i }) => i === cursorRef.current);
         if (!hit) return;
         e.preventDefault();
         if (hit.it.submenu) {
-          openSub(hit.i);
+          openSub(d, hit.i);
           return;
         }
         hit.it.onClick?.();
@@ -244,8 +251,9 @@ export function ContextMenu({
   }, [ignore]);
   // A hovered item that went disabled must not stay the cursor.
   useEffect(() => {
-    if (cursorRef.current >= 0 && !top.some(({ i }) => i === cursorRef.current)) setCursor(-1);
-  }, [top]);
+    const at = cursorsRef.current[0] ?? -1;
+    if (at >= 0 && !live(items).some(({ i }) => i === at)) setCursors([-1]);
+  }, [items]);
   // Clamped against the estimate first, then against the box once it has
   // one: 220 and 340 wide are both common, and separators and headings are
   // not 30px tall.
@@ -256,73 +264,71 @@ export function ContextMenu({
     const r = ref.current?.getBoundingClientRect();
     if (r) setPos(clampToViewport(x, y, r.width, r.height));
   }, [x, y, items.length]);
+
+  const panelRows = (d: number, list: MenuItem[]) =>
+    list.map((it, i) =>
+      it.separator ? (
+        <div className="menu-sep" key={i} />
+      ) : it.heading ? (
+        <div className="menu-cat" key={i}>
+          {it.label}
+        </div>
+      ) : (
+        <Row
+          key={i}
+          it={it}
+          id={d === 0 ? `${uid}-${i}` : undefined}
+          className={`menu-item ${i === (cursors[d] ?? -1) ? "cur" : ""}`}
+          ref={(el: HTMLButtonElement | null) => {
+            (rows.current[d] ??= [])[i] = el;
+          }}
+          aria-expanded={it.submenu ? open[d]?.at === i : undefined}
+          onMouseEnter={() => {
+            setCursors([...cursorsRef.current.slice(0, d), i]);
+            if (it.submenu) openSub(d, i);
+            else closeBelow(d);
+          }}
+          onClick={() => {
+            if (it.submenu) {
+              openSub(d, i);
+              return;
+            }
+            it.onClick?.();
+            if (!it.keepOpen) onClose();
+          }}
+        />
+      ),
+    );
+
   return (
     <div
       className={`menu ${className ?? ""}`}
-      ref={ref}
+      ref={(el) => {
+        ref.current = el;
+        panels.current[0] = el;
+      }}
       style={{ left: pos.x, top: pos.y }}
       role="menu"
       tabIndex={-1}
-      aria-activedescendant={cursor >= 0 ? `${uid}-${cursor}` : undefined}
+      aria-activedescendant={(cursors[0] ?? -1) >= 0 ? `${uid}-${cursors[0]}` : undefined}
     >
-      {items.map((it, i) =>
-        it.separator ? (
-          <div className="menu-sep" key={i} />
-        ) : it.heading ? (
-          <div className="menu-cat" key={i}>
-            {it.label}
-          </div>
-        ) : (
-          <Row
-            key={i}
-            it={it}
-            id={`${uid}-${i}`}
-            className={`menu-item ${i === cursor ? "cur" : ""}`}
-            ref={(el: HTMLButtonElement | null) => {
-              rows.current[i] = el;
-            }}
-            aria-expanded={it.submenu ? sub?.at === i : undefined}
-            onMouseEnter={() => {
-              setCursor(i);
-              if (it.submenu) openSub(i);
-              else setSub(null);
-            }}
-            onClick={() => {
-              if (it.submenu) {
-                openSub(i);
-                return;
-              }
-              it.onClick?.();
-              if (!it.keepOpen) onClose();
-            }}
-          />
-        ),
-      )}
+      {panelRows(0, items)}
       {/* Inside the parent box in the DOM, so a press in here is not an
           outside click and does not close the menu it belongs to. */}
-      {sub && (
-        <div className="menu menu-sub" role="menu" style={{ left: sub.x, top: sub.y }}>
-          {kids.map((it, j) =>
-            it.separator ? (
-              <div className="menu-sep" key={j} />
-            ) : it.heading ? (
-              <div className="menu-cat" key={j}>
-                {it.label}
-              </div>
-            ) : (
-              <Row
-                key={j}
-                it={it}
-                className={`menu-item ${j === subCursor ? "cur" : ""}`}
-                onMouseEnter={() => setSubCursor(j)}
-                onClick={() => {
-                  it.onClick?.();
-                  onClose();
-                }}
-              />
-            ),
-          )}
-        </div>
+      {open.map((lv, k) =>
+        lists[k + 1] ? (
+          <div
+            className="menu menu-sub"
+            role="menu"
+            key={k}
+            style={{ left: lv.x, top: lv.y }}
+            ref={(el) => {
+              panels.current[k + 1] = el;
+            }}
+          >
+            {panelRows(k + 1, lists[k + 1])}
+          </div>
+        ) : null,
       )}
     </div>
   );
