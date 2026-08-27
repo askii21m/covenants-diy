@@ -185,7 +185,11 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
             // Fold the leaf up its merkle path to recover the tree root,
             // which BIP-443 substitutes for a taptree of -1. An empty path
             // means a single-leaf tree, whose root is the leaf itself.
-            let mut node = TapNodeHash::from(leaf);
+            // The control block says which leaf version its script was
+            // committed under; assuming TapScript folds the wrong leaf hash
+            // and every taptree of -1 then names the wrong contract.
+            let leaf_for_tree = TapLeafHash::from_script(&script, cb.leaf_version);
+            let mut node = TapNodeHash::from(leaf_for_tree);
             for step in cb.merkle_branch.as_slice() {
                 node = TapNodeHash::from_node_hashes(node, *step);
             }
@@ -240,6 +244,7 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
                 res.success,
                 res.error.as_ref().map(|e| format!("{e:?}")),
                 res.final_stack.iter_str().map(hex_of).collect::<Vec<_>>(),
+                res.opcode.is_some(),
             )),
         };
 
@@ -255,7 +260,24 @@ pub fn trace(req: DebugRequest) -> Result<DebugTrace, String> {
                     error: None,
                 });
             }
-            Some((success, error, final_stack)) => {
+            Some((success, error, final_stack, ended_on_opcode)) => {
+                // An opcode can end the script by succeeding outright, and it
+                // still has to appear: a trace that stops with no row for the
+                // opcode that stopped it reads as if nothing ran. Only from
+                // mid-execution, since a script the BIP-342 pre-scan passed
+                // never ran an opcode at all, and says so on the enforcement
+                // line instead.
+                if error.is_none() && ended_on_opcode && !steps.is_empty() {
+                    steps.push(Step {
+                        index: steps.len(),
+                        position,
+                        op: op_text(&positions, position),
+                        stack: final_stack.clone(),
+                        altstack: exec.altstack().iter_str().map(hex_of).collect(),
+                        validation_weight: exec.stats().validation_weight,
+                        error: None,
+                    });
+                }
                 if let Some(err) = &error {
                     steps.push(Step {
                         index: steps.len(),
