@@ -162,6 +162,12 @@ pub struct TxTemplate {
     /// substitutes when a taptree of -1 is given.
     pub taptree_root: Option<[u8; 32]>,
     /// Value of the coin this input spends, when the caller knows it.
+    ///
+    /// BIP-443 tracks its amount rules per transaction, accumulating across
+    /// every input's script. One input runs here, so those rules cover the
+    /// calls this script makes and not a sibling input's: two inputs each
+    /// carrying their amount into the same output are summed by a node and
+    /// counted once here.
     /// Distinct from `prevouts`, which a caller may fill with placeholders
     /// to satisfy hashing: BIP-443's amount rules are only meaningful over
     /// a real amount, and a placeholder zero would satisfy them vacuously.
@@ -1243,6 +1249,11 @@ impl Exec {
             OP_RETURN_187 if self.ctx == ExecCtx::Tapscript && self.opt.deployments.ccv => {
                 use covenants_core::ccv::{self, CcvMode};
 
+                // BIP-443's own sigops section is still TODO, so nothing is
+                // charged here. Inventing a number would be a rule this tool
+                // made up, and the readout would then report a budget no node
+                // agrees with; the cost is two EC operations, so a real one is
+                // likely once the BIP settles.
                 self.stack.needn(5)?;
                 let mode_num = self.stack.topnum(-1, self.opt.require_minimal)?;
                 let taptree = self.stack.topstr(-2)?;
@@ -1299,7 +1310,12 @@ impl Exec {
                     None
                 } else if taptree.len() == 32 {
                     Some(<[u8; 32]>::try_from(&taptree[..]).unwrap())
-                } else if read_scriptint(&taptree, DEFAULT_MAX_SCRIPTINT_SIZE, false) == Ok(-1) {
+                } else if read_scriptint(
+                    &taptree,
+                    DEFAULT_MAX_SCRIPTINT_SIZE,
+                    self.opt.require_minimal,
+                ) == Ok(-1)
+                {
                     Some(self.tx.taptree_root.ok_or(ExecError::CcvTaptreeMissing)?)
                 } else {
                     return Err(ExecError::CcvParameter);
@@ -1310,7 +1326,9 @@ impl Exec {
                     covenants_core::taproot::nums_internal_key()
                 } else if pk.len() == 32 {
                     XOnlyPublicKey::from_slice(&pk).map_err(|_| ExecError::CcvParameter)?
-                } else if read_scriptint(&pk, DEFAULT_MAX_SCRIPTINT_SIZE, false) == Ok(-1) {
+                } else if read_scriptint(&pk, DEFAULT_MAX_SCRIPTINT_SIZE, self.opt.require_minimal)
+                    == Ok(-1)
+                {
                     self.tx
                         .internal_key
                         .ok_or(ExecError::CcvInternalKeyMissing)?
