@@ -139,8 +139,8 @@ function Chrome({ openMenu, open }: { openMenu: OpenMenu; open: MenuName | null 
           className="sel-btn"
           aria-haspopup="menu"
           aria-expanded={open === "theme"}
-          title={theme === "system" ? "Theme: matching the system" : `Theme: ${theme}`}
-          aria-label={theme === "system" ? "Theme: matching the system" : `Theme: ${theme}`}
+          title={`Theme: ${theme}`}
+          aria-label={`Theme: ${theme}`}
           onMouseDown={(e) => {
             e.preventDefault();
             openMenu("theme", themeBtn.current!);
@@ -595,7 +595,7 @@ export default function App() {
   // The switches, and the bundles people have actually proposed. The
   // switches stay open as they are set; a bundle sets them all and closes.
   const themeItems: MenuItem[] = THEMES.map((t) => ({
-    label: t === "system" ? "Match the system" : t === "light" ? "Light" : "Dark",
+    label: t[0].toUpperCase() + t.slice(1),
     checked: theme === t,
     onClick: () => useStore.getState().setTheme(t),
   }));
