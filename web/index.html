@@ -144,6 +144,32 @@
       .boot a {
         color: #0f766e;
       }
+
+      /* The splash is painted before any script runs, so it cannot read the
+         saved choice and follows the machine instead. A window set to light
+         corrects itself the moment the stamp lands. */
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme="light"]) .boot {
+          background: #101615;
+          color: #e7efed;
+        }
+        html:not([data-theme="light"]) .boot p,
+        html:not([data-theme="light"]) .boot .ex {
+          color: #9db0ac;
+        }
+        html:not([data-theme="light"]) .boot h2,
+        html:not([data-theme="light"]) .boot .quiet {
+          color: #6f8480;
+        }
+        html:not([data-theme="light"]) .boot .ops,
+        html:not([data-theme="light"]) .boot .ex em,
+        html:not([data-theme="light"]) .boot a {
+          color: #2fae9e;
+        }
+        html:not([data-theme="light"]) .boot .ex b {
+          color: #e7efed;
+        }
+      }
     </style>
   </head>
   <body>

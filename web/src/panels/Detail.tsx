@@ -360,13 +360,12 @@ function CommentDetail({ id, data }: { id: string; data: Record<string, unknown>
       <div className="cm-row">
         <span>Comment color</span>
         <div className="swatches" role="radiogroup" aria-label="comment colour">
-          {Object.entries(COMMENT_COLORS).map(([k, hex]) => (
+          {COMMENT_COLORS.map((k) => (
             <button
               key={k}
               role="radio"
               aria-checked={data.color === k}
-              className={`swatch ${data.color === k ? "on" : ""}`}
-              style={{ background: hex }}
+              className={`swatch cm-c-${k} ${data.color === k ? "on" : ""}`}
               title={k}
               onClick={() => setField(id, "color", k)}
             />

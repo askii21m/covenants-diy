@@ -44,6 +44,7 @@
 
 /* covenants.diy. Quiet chrome; the canvas and the values carry it. */
 :root {
+  color-scheme: light;
   --canvas: #f4f5f7;
   --surface: #fff;
   --line: #e4e7ec;
@@ -53,6 +54,10 @@
   --t3: #8c96a5;
   --a: #0f766e;
   --a2: #e4f1ef;
+  /* Neutral, and its own colour. Tinting it with the accent put it on the
+     same hue as the opcodes and the ref chip, so selected code washed out
+     against its own highlight. */
+  --select: rgb(90 100 114 / 18%);
   --warn: #b54708;
   --warn2: #fdf0e6;
   --fail: #b42318;
@@ -66,6 +71,25 @@
   --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
   --sans: "Instrument Sans", system-ui, sans-serif;
   --lift: 0 1px 2px rgba(14, 17, 22, 0.06), 0 1px 3px rgba(14, 17, 22, 0.04);
+  --pop: 0 8px 28px rgba(14, 17, 22, 0.14), 0 1px 3px rgba(14, 17, 22, 0.06);
+  --pop-s: 0 2px 8px rgba(0, 0, 0, 0.18);
+  --on-solid: #fff;
+  --fail-line: #e3b3ae;
+  --sunk: rgba(14, 17, 22, 0.03);
+  --scrim: rgb(0 0 0 / 30%);
+  --sel: rgba(15, 118, 110, 0.08);
+  --sel2: rgba(15, 118, 110, 0.04);
+  /* Node headers, tinted by what the node is for. */
+  --hd-covenants: #eaf4f2;
+  --hd-transactions: #ebf0f8;
+  --hd-bytes: #eeeff1;
+  /* React Flow paints the grid and minimap itself and takes these as
+     props, so they live here and are handed over by name. */
+  --grid-minor: #eceef1;
+  --grid-major: #dfe3e8;
+  --mm-mask: rgba(244, 245, 247, 0.72);
+  --mm-node: #c9d0d9;
+  --mm-comment: #e4e7ec;
   --panel: 280px;
   /* Width of the opcode doc panel, shared by the hover and the
      completion info so the same prose wraps the same way in both. */
@@ -79,10 +103,89 @@
   --sy-op: #0f766e;
   --sy-cov: #8a4b0f;
   --sy-ref: #0f766e;
-  --sy-ref-bg: #e4f1ef;
+  --sy-ref-bg: rgb(15 118 110 / 12%);
   --sy-num: #2e5fa8;
   --sy-hex: #5a6472;
   --sy-bad: #b42318;
+}
+
+/* The same page under different light. Only the tokens move; every rule
+   below reads through them, so nothing here restyles a component.
+
+   The type, wire and syntax colours are deliberately absent. They carry
+   meaning rather than mood, and a lightness nudge is not enough to keep
+   eleven of them apart on a dark ground, so they are still their daylight
+   values and get their own pass. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #101615;
+  --surface: #182120;
+  --line: #2b3937;
+  --line2: #202c2a;
+  --t: #e7efed;
+  --t2: #9db0ac;
+  --t3: #6f8480;
+  --a: #2fae9e;
+  --a2: #14322e;
+  --warn: #e0954f;
+  --warn2: #33240f;
+  --fail: #e8695c;
+  --fail2: #3a1a17;
+  --fail-line: #7c3b34;
+  /* Solid fills invert: a light red wants dark text on it, not white. */
+  --on-solid: #0e1116;
+  --lift: 0 1px 2px rgb(0 0 0 / 40%), 0 1px 3px rgb(0 0 0 / 28%);
+  --pop: 0 10px 30px rgb(0 0 0 / 55%), 0 1px 3px rgb(0 0 0 / 40%);
+  --pop-s: 0 2px 8px rgb(0 0 0 / 50%);
+  --sunk: rgb(255 255 255 / 4%);
+  --scrim: rgb(0 0 0 / 55%);
+  --sel: rgb(47 174 158 / 16%);
+  --sel2: rgb(47 174 158 / 8%);
+  --hd-covenants: #16302c;
+  --hd-transactions: #17222f;
+  --hd-bytes: #1e2725;
+  /* A grid reads as loudly as its contrast against the ground behind it,
+     so these hold the same ratio the daylight grid does, 1.07 and 1.18,
+     rather than the same distance in channel values. Matching the numbers
+     instead of the ratio put the major grid at 1.34, near double. */
+  --grid-minor: #151c1a;
+  --grid-major: #1b2422;
+  --mm-mask: rgb(16 22 21 / 68%);
+  --mm-node: #33403e;
+  --mm-comment: #41504d;
+  --select: rgb(157 176 172 / 22%);
+
+  /* Types and wires. Held to what the daylight set already achieves: its
+     worst pair sits at 11.1 and its worst colour-blind pair at 6.0, and
+     these come in at 14.1 and 6.7 against the dark ground. The three
+     neutrals keep their order of emphasis rather than all brightening,
+     since 'any' is meant to recede. */
+  --t-hash: #45c4b0;
+  --t-script: #ccd2da;
+  --t-tx: #5b93ef;
+  --t-witness: #d78fd0;
+  --t-spk: #d4ab52;
+  --t-hex: #7f8c99;
+  --t-outpoint: #3fbcd8;
+  --t-number: #545e67;
+  --t-text: #545e67;
+  --t-address: #d4ab52;
+  --t-any: #3d454d;
+  --w-hash: #45c4b0;
+  --w-script: #ccd2da;
+  --w-tx: #5b93ef;
+  --w-witness: #d78fd0;
+  --w-spk: #d4ab52;
+  --w-value: #3d454d;
+
+  /* script syntax */
+  --sy-op: #45c4b0;
+  --sy-cov: #e09a54;
+  --sy-ref: #45c4b0;
+  --sy-ref-bg: rgb(69 196 176 / 18%);
+  --sy-num: #5b93ef;
+  --sy-hex: #9aa6b3;
+  --sy-bad: #e8695c;
 }
 * {
   box-sizing: border-box;
@@ -239,8 +342,8 @@ textarea {
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  background: #b42318;
-  color: #fff;
+  background: var(--fail);
+  color: var(--on-solid);
   font-size: 13px;
   line-height: 1.45;
   padding: 8px 12px 8px 16px;
@@ -249,7 +352,7 @@ textarea {
   flex: none;
   border: 0;
   background: none;
-  color: #fff;
+  color: var(--on-solid);
   font-size: 16px;
   line-height: 1;
   width: 20px;
@@ -273,7 +376,7 @@ textarea {
   font-size: 13px;
   padding: 8px 14px;
   border-radius: var(--r);
-  box-shadow: 0 6px 20px rgba(14, 17, 22, 0.2);
+  box-shadow: var(--pop);
   z-index: 60;
 }
 
@@ -562,7 +665,7 @@ textarea {
   box-shadow: 0 0 0 3px var(--a2);
 }
 .cov.st-error {
-  border-color: #e3b3ae;
+  border-color: var(--fail-line);
 }
 .cov .hd {
   display: flex;
@@ -1046,10 +1149,20 @@ textarea {
   border-left-color: var(--t);
   border-left-width: 2px;
 }
-.cm-editor .cm-selectionBackground,
-.cm-editor.cm-focused .cm-selectionBackground,
-.cm-editor ::selection {
-  background: var(--a2);
+/* One selection colour for the whole app. Translucent, so the ref chip
+   underneath tints through it instead of punching a hole in the band. */
+::selection {
+  background: var(--select);
+}
+/* CodeMirror's own theme is built without the dark flag, so it paints the
+   light selection at every theme, and it reaches the layer through five
+   classes. The :root here is only there to outrank that, since a tie would
+   be settled by whichever stylesheet loaded last. */
+:root .cm-editor > .cm-scroller > .cm-selectionLayer .cm-selectionBackground,
+:root .cm-editor.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground,
+:root .cm-editor .cm-selectionBackground,
+:root .cm-editor ::selection {
+  background: var(--select);
 }
 .cm-editor .cm-placeholder {
   color: var(--t3);
@@ -1073,9 +1186,7 @@ textarea {
   border: 1px solid var(--line);
   background: var(--surface);
   border-radius: var(--r);
-  box-shadow:
-    0 8px 28px rgba(14, 17, 22, 0.14),
-    0 1px 3px rgba(14, 17, 22, 0.06);
+  box-shadow: var(--pop);
   font: 13px var(--sans);
   color: var(--t);
   z-index: 80;
@@ -1362,12 +1473,12 @@ textarea {
   cursor: grabbing;
 }
 .react-flow__selection {
-  background: rgba(15, 118, 110, 0.08);
+  background: var(--sel);
   border: 1px solid var(--a);
 }
 .react-flow__nodesselection-rect {
   border: 1px dashed var(--a);
-  background: rgba(15, 118, 110, 0.04);
+  background: var(--sel2);
 }
 
 /* pin colours by type; the handle is a ring so the colour reads at 10px */
@@ -1537,16 +1648,16 @@ textarea {
   background: var(--canvas);
 }
 .cov.k-covenants .hd {
-  background: #eaf4f2;
+  background: var(--hd-covenants);
 }
 .cov.k-transactions .hd {
-  background: #ebf0f8;
+  background: var(--hd-transactions);
 }
 .cov.k-bytes .hd {
-  background: #eeeff1;
+  background: var(--hd-bytes);
 }
 .cov.k-canvas .hd {
-  background: #eeeff1;
+  background: var(--hd-bytes);
 }
 .cov .hd .chev {
   background: none;
@@ -1607,7 +1718,7 @@ textarea {
 .rr:hover .rr-drag,
 .rr.on .rr-drag {
   border-color: var(--line);
-  background: rgba(14, 17, 22, 0.03);
+  background: var(--sunk);
 }
 .rr .rr-pin.react-flow__handle {
   width: 12px;
@@ -1647,6 +1758,61 @@ textarea {
 }
 .react-flow__node-reroute {
   cursor: default;
+}
+
+/* Comment colours, named on the node. "ink" is the strongest neutral rather
+   than a dark one, so it turns over between themes while the rest only
+   brighten enough to hold against the ground. */
+.cm-c-teal {
+  --cm: #0f766e;
+}
+.cm-c-blue {
+  --cm: #2e5fa8;
+}
+.cm-c-violet {
+  --cm: #7c6bae;
+}
+.cm-c-amber {
+  --cm: #b54708;
+}
+.cm-c-rose {
+  --cm: #b42318;
+}
+.cm-c-slate {
+  --cm: #5a6472;
+}
+.cm-c-green {
+  --cm: #3f7d3a;
+}
+.cm-c-ink {
+  --cm: #0e1116;
+}
+:root[data-theme="dark"] .cm-c-teal {
+  --cm: #45c4b0;
+}
+:root[data-theme="dark"] .cm-c-blue {
+  --cm: #5b93ef;
+}
+:root[data-theme="dark"] .cm-c-violet {
+  --cm: #a892e8;
+}
+:root[data-theme="dark"] .cm-c-amber {
+  --cm: #e09a54;
+}
+:root[data-theme="dark"] .cm-c-rose {
+  --cm: #e8695c;
+}
+:root[data-theme="dark"] .cm-c-slate {
+  --cm: #9aa6b3;
+}
+:root[data-theme="dark"] .cm-c-green {
+  --cm: #6fbf62;
+}
+:root[data-theme="dark"] .cm-c-ink {
+  --cm: #ccd2da;
+}
+.swatch {
+  background: var(--cm);
 }
 
 /* comment: colour comes from the node as --cm */
@@ -1705,7 +1871,7 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   pointer-events: none;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--pop-s);
 }
 .cm-bubble::after {
   content: "";
@@ -1809,9 +1975,7 @@ textarea {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r);
-  box-shadow:
-    0 8px 28px rgba(14, 17, 22, 0.14),
-    0 1px 3px rgba(14, 17, 22, 0.06);
+  box-shadow: var(--pop);
   padding: 6px;
   font-size: 13px;
 }
@@ -2045,6 +2209,19 @@ textarea {
   grid-row: 1;
   justify-self: end;
 }
+/* A two-line row is a grid, and a tick would otherwise take the column the
+   label lives in and push it to the right edge. Rows with both get a column
+   of their own for it. */
+.menu-item:has(em):has(.menu-tick) {
+  grid-template-columns: auto 1fr auto;
+}
+.menu-item:has(em):has(.menu-tick) .menu-more {
+  grid-area: 1 / 3;
+}
+/* The second line belongs under the label, not under the tick beside it. */
+.menu-item:has(em):has(.menu-tick) em {
+  grid-column: 2 / -1;
+}
 .menu-tick {
   flex: none;
   font-style: normal;
@@ -2056,6 +2233,12 @@ textarea {
 .sel select {
   max-width: 190px;
   text-overflow: ellipsis;
+}
+/* An icon stands where a word does in the other two, so it holds the same
+   row height rather than collapsing the control. */
+.sel-btn svg {
+  display: block;
+  margin: 2px 0;
 }
 .sel-btn {
   font-size: 13.5px;
@@ -2155,7 +2338,7 @@ textarea {
     position: fixed;
     inset: 46px 0 0;
     z-index: 35;
-    background: rgb(0 0 0 / 30%);
+    background: var(--scrim);
   }
 
   /* In the header these stood side by side in their own columns. At the foot

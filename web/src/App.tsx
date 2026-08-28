@@ -11,6 +11,7 @@ import { InlineName } from "./nodes/InlineName";
 import { EXAMPLES, EXAMPLE_GROUPS } from "./examples";
 import { shortLink, decodeFlow, fetchShared, fragmentOnUrl, idOnUrl, type SharedDoc } from "./share";
 import { NETWORKS, FLAGS, PRESETS, flagsOf, nameOf, summaryOf, toggle } from "./engine";
+import { THEMES, apply as applyTheme, watchSystem, type Theme } from "./theme";
 
 /** A flow file: the document's flow, its name, and the view it was left
  *  at. Older files have no name and take the file's. */
@@ -56,7 +57,7 @@ function useOpeners() {
   return { openBlank, openExample, openFile };
 }
 
-type MenuName = "file" | "edit" | "view" | "new" | "rules";
+type MenuName = "file" | "edit" | "view" | "new" | "rules" | "theme";
 type OpenMenu = (which: MenuName, trigger: HTMLElement) => void;
 
 /** Writes the active document out as a file. */
@@ -94,6 +95,31 @@ function useNarrow() {
   return narrow;
 }
 
+/** A sun, a moon, and a screen for whatever the machine is set to. */
+function ThemeIcon({ theme }: { theme: Theme }) {
+  if (theme === "light")
+    return (
+      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+        <circle cx="8" cy="8" r="3.1" fill="currentColor" />
+        <g stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <path d="M8 1.1v1.7M8 13.2v1.7M14.9 8h-1.7M2.8 8H1.1M12.9 3.1l-1.2 1.2M4.3 11.7l-1.2 1.2M12.9 12.9l-1.2-1.2M4.3 4.3L3.1 3.1" />
+        </g>
+      </svg>
+    );
+  if (theme === "dark")
+    return (
+      <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+        <path d="M13.5 10.1A6 6 0 0 1 5.9 2.5a6 6 0 1 0 7.6 7.6Z" fill="currentColor" />
+      </svg>
+    );
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true" focusable="false">
+      <rect x="1.7" y="2.7" width="12.6" height="8.8" rx="1.4" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M5.6 13.9h4.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** Network, ruleset, and the link to the source. These sit in the header
  *  when it has the width for them, and at the foot of the node drawer when
  *  it does not. */
@@ -101,9 +127,28 @@ function Chrome({ openMenu, open }: { openMenu: OpenMenu; open: MenuName | null 
   const network = useStore((s) => s.network);
   const ruleset = useStore((s) => s.ruleset);
   const setNetwork = useStore((s) => s.setNetwork);
+  const theme = useStore((s) => s.theme);
   const rules = useRef<HTMLButtonElement>(null);
+  const themeBtn = useRef<HTMLButtonElement>(null);
   return (
     <>
+      <label className="sel">
+        <span>theme</span>
+        <button
+          ref={themeBtn}
+          className="sel-btn"
+          aria-haspopup="menu"
+          aria-expanded={open === "theme"}
+          title={theme === "system" ? "Theme: matching the system" : `Theme: ${theme}`}
+          aria-label={theme === "system" ? "Theme: matching the system" : `Theme: ${theme}`}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            openMenu("theme", themeBtn.current!);
+          }}
+        >
+          <ThemeIcon theme={theme} />
+        </button>
+      </label>
       <label className="sel">
         <span>network</span>
         <select value={network} onChange={(e) => setNetwork(e.target.value as (typeof NETWORKS)[number])}>
@@ -428,6 +473,15 @@ export default function App() {
   const setRuleset = useStore((s) => s.setRuleset);
   const flags = flagsOf(ruleset);
   const [menu, setMenu] = useState<{ which: MenuName; x: number; y: number; trigger: HTMLElement } | null>(null);
+  const theme = useStore((s) => s.theme);
+  // The stamp is written before the first render, so this is for the changes
+  // after it: a new choice, or the machine's own setting moving under a
+  // window that is following along.
+  useEffect(() => {
+    applyTheme(theme);
+    if (theme !== "system") return;
+    return watchSystem(() => applyTheme(theme));
+  }, [theme]);
   const narrow = useNarrow();
   const [navOpen, setNavOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -540,6 +594,12 @@ export default function App() {
 
   // The switches, and the bundles people have actually proposed. The
   // switches stay open as they are set; a bundle sets them all and closes.
+  const themeItems: MenuItem[] = THEMES.map((t) => ({
+    label: t === "system" ? "Match the system" : t === "light" ? "Light" : "Dark",
+    checked: theme === t,
+    onClick: () => useStore.getState().setTheme(t),
+  }));
+
   const rulesItems: MenuItem[] = [
     { label: "Opcodes", heading: true },
     ...FLAGS.map((f) => ({
@@ -552,12 +612,19 @@ export default function App() {
     ...(["Proposed", "Running"] as const).flatMap((g) => [
       { separator: true, label: "" },
       { label: g, heading: true },
-      ...PRESETS.filter((p) => p.group === g).map((p) => ({
-        label: p.label,
-        detail: p.hint,
-        keepOpen: true,
-        onClick: () => setRuleset(nameOf(flagsOf(p.on.join("+") || "none"))),
-      })),
+      ...PRESETS.filter((p) => p.group === g).map((p) => {
+        const set = flagsOf(p.on.join("+") || "none");
+        return {
+          label: p.label,
+          detail: p.hint,
+          // Ticked by what is switched on rather than by what was last
+          // clicked, so arriving at a named combination one opcode at a time
+          // still shows which one you have arrived at.
+          checked: FLAGS.every((f) => !!flags[f.id] === !!set[f.id]),
+          keepOpen: true,
+          onClick: () => setRuleset(nameOf(set)),
+        };
+      }),
     ]),
   ];
 
@@ -636,7 +703,9 @@ export default function App() {
                     ? viewItems
                     : menu.which === "rules"
                       ? rulesItems
-                      : newItems
+                      : menu.which === "theme"
+                        ? themeItems
+                        : newItems
             }
             className={menu.which === "rules" ? "menu-rules" : undefined}
             ignore={menu.trigger}

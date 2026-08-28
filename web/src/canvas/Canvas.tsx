@@ -22,6 +22,7 @@ import {
   type OnReconnect,
 } from "@xyflow/react";
 import { useStore, isValidConnection, wireType, type FlowNode, type Pending } from "../store";
+import { useResolved } from "../theme";
 import { findPort, KINDS } from "../registry";
 import { CovNode } from "../nodes/CovNode";
 import { RerouteNode } from "../nodes/RerouteNode";
@@ -59,6 +60,7 @@ export function Canvas() {
   const s = useStore.getState;
   const rf = useReactFlow();
   const showMinimap = useStore((s) => s.showMinimap);
+  const mode = useResolved(useStore((s) => s.theme));
   // The menu bar renders outside ReactFlowProvider and so cannot hold the
   // instance. The canvas leaves the three view actions here for it.
   useEffect(() => {
@@ -603,6 +605,10 @@ export function Canvas() {
           e.preventDefault();
           e.dataTransfer.dropEffect = "move";
         }}
+        // React Flow paints its own grid, edges and handles, and defaults
+        // to light regardless of the page around it. It takes the palette in
+        // force rather than the machine's, which an explicit choice overrides.
+        colorMode={mode}
         panOnDrag={[1, 2]}
         panActivationKeyCode="Space"
         selectionOnDrag
@@ -622,14 +628,22 @@ export function Canvas() {
         elevateNodesOnSelect={false}
         proOptions={{ hideAttribution: true }}
       >
-        <Background id="minor" variant={BackgroundVariant.Lines} gap={GRID} lineWidth={1} color="#ECEEF1" />
-        <Background id="major" variant={BackgroundVariant.Lines} gap={GRID * 5} lineWidth={1} color="#DFE3E8" />
+        {/* These land as CSS custom property values rather than SVG
+            attributes, so they can point at the page's own tokens. */}
+        <Background id="minor" variant={BackgroundVariant.Lines} gap={GRID} lineWidth={1} color="var(--grid-minor)" />
+        <Background
+          id="major"
+          variant={BackgroundVariant.Lines}
+          gap={GRID * 5}
+          lineWidth={1}
+          color="var(--grid-major)"
+        />
         {showMinimap && (
           <MiniMap
             pannable
             zoomable
-            nodeColor={(n) => (n.type === "comment" ? "#E4E7EC" : "#C9D0D9")}
-            maskColor="rgba(244,245,247,.72)"
+            nodeColor={(n) => (n.type === "comment" ? "var(--mm-comment)" : "var(--mm-node)")}
+            maskColor="var(--mm-mask)"
           />
         )}
       </ReactFlow>

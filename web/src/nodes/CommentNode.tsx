@@ -9,16 +9,9 @@ import { NodeResizer, useViewport, type NodeProps } from "@xyflow/react";
 import { useStore, type FlowNode } from "../store";
 import { InlineName } from "./InlineName";
 
-export const COMMENT_COLORS: Record<string, string> = {
-  teal: "#0F766E",
-  blue: "#2E5FA8",
-  violet: "#7C6BAE",
-  amber: "#B54708",
-  rose: "#B42318",
-  slate: "#5A6472",
-  green: "#3F7D3A",
-  ink: "#0E1116",
-};
+/** The colours themselves live in the stylesheet, named by these, so they
+ *  move with the theme like every other colour does. */
+export const COMMENT_COLORS = ["teal", "blue", "violet", "amber", "rose", "slate", "green", "ink"];
 
 function CommentImpl({ id, data, selected, positionAbsoluteX, positionAbsoluteY }: NodeProps<FlowNode>) {
   const setField = useStore((s) => s.setField);
@@ -35,7 +28,7 @@ function CommentImpl({ id, data, selected, positionAbsoluteX, positionAbsoluteY 
   useEffect(() => {
     setLayer(document.querySelector<HTMLElement>(".react-flow__viewport"));
   }, []);
-  const color = COMMENT_COLORS[String(data.color ?? "teal")] ?? COMMENT_COLORS.teal;
+  const key = COMMENT_COLORS.includes(String(data.color)) ? String(data.color) : "teal";
   const title = String(data.name ?? "");
   // Unreal's "Show Bubble When Zoomed": below 60% a bubble floats above
   // the box, counter-scaled so the title is the same size on screen
@@ -45,8 +38,8 @@ function CommentImpl({ id, data, selected, positionAbsoluteX, positionAbsoluteY 
     // React Flow does not select this node (it is marquee-proof), so a press
     // on it selects it here, in the capture phase, before the drag starts.
     <div
-      className={`comment ${selected ? "on" : ""}`}
-      style={{ width: Number(data.width), height: Number(data.height), ["--cm" as string]: color }}
+      className={`comment cm-c-${key} ${selected ? "on" : ""}`}
+      style={{ width: Number(data.width), height: Number(data.height) }}
       onMouseDownCapture={(e) => {
         if (e.button === 0 && !selected) select(id);
       }}
@@ -65,10 +58,7 @@ function CommentImpl({ id, data, selected, positionAbsoluteX, positionAbsoluteY 
       {bubble > 0 &&
         layer &&
         createPortal(
-          <div
-            className="cm-anchor"
-            style={{ left: positionAbsoluteX, top: positionAbsoluteY, ["--cm" as string]: color }}
-          >
+          <div className={`cm-anchor cm-c-${key}`} style={{ left: positionAbsoluteX, top: positionAbsoluteY }}>
             <div className="cm-bubble" style={{ transform: `scale(${bubble})`, maxWidth: Number(data.width) / bubble }}>
               {title}
             </div>

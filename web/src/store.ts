@@ -54,6 +54,8 @@ export interface Doc extends Flow {
   future: Snapshot[];
 }
 
+import { type Theme } from "./theme";
+
 const SESSION_KEY = "covenants.session";
 const LAYOUT_KEY = "covenants.layout";
 
@@ -63,9 +65,10 @@ interface Layout {
   panelHeight: number;
   splitRatio: number;
   showMinimap: boolean;
+  theme: Theme;
 }
 export function savedLayout(): Layout {
-  const fallback = { panelHeight: 280, splitRatio: 0.56, showMinimap: true };
+  const fallback: Layout = { panelHeight: 280, splitRatio: 0.56, showMinimap: true, theme: "system" };
   try {
     const raw = localStorage.getItem(LAYOUT_KEY);
     if (!raw) return fallback;
@@ -74,10 +77,16 @@ export function savedLayout(): Layout {
       panelHeight: Number.isFinite(l.panelHeight) ? Math.max(120, Math.min(720, l.panelHeight!)) : fallback.panelHeight,
       splitRatio: Number.isFinite(l.splitRatio) ? Math.max(0.2, Math.min(0.85, l.splitRatio!)) : fallback.splitRatio,
       showMinimap: typeof l.showMinimap === "boolean" ? l.showMinimap : fallback.showMinimap,
+      theme: l.theme === "light" || l.theme === "dark" || l.theme === "system" ? l.theme : fallback.theme,
     };
   } catch {
     return fallback;
   }
+}
+/** Takes the four fields off whatever it is handed, so a new one only has
+ *  to be added to Layout and to the state. */
+function keepLayout(l: Layout) {
+  saveLayout({ panelHeight: l.panelHeight, splitRatio: l.splitRatio, showMinimap: l.showMinimap, theme: l.theme });
 }
 function saveLayout(l: Layout) {
   try {
@@ -254,6 +263,7 @@ interface State extends Flow {
   /** Fraction of the detail panel given to the left half, 0.2 to 0.85. */
   splitRatio: number;
   showMinimap: boolean;
+  theme: Theme;
   past: Snapshot[];
   future: Snapshot[];
   clipboard: Snapshot | null;
@@ -290,6 +300,7 @@ interface State extends Flow {
   select: (id: string | null) => void;
   setPanelHeight: (h: number) => void;
   toggleMinimap: () => void;
+  setTheme: (t: Theme) => void;
   setSplitRatio: (r: number) => void;
   undo: () => void;
   redo: () => void;
@@ -539,6 +550,7 @@ export const useStore = create<State>((set, get) => {
     panelHeight: savedLayout().panelHeight,
     splitRatio: savedLayout().splitRatio,
     showMinimap: savedLayout().showMinimap,
+    theme: savedLayout().theme,
     past: [],
     future: [],
     clipboard: null,
@@ -680,19 +692,20 @@ export const useStore = create<State>((set, get) => {
         nodes: get().nodes.map((n) => (n.selected === (n.id === selected) ? n : { ...n, selected: n.id === selected })),
       }),
     setPanelHeight: (h) => {
-      const panelHeight = Math.max(120, Math.min(720, h));
-      set({ panelHeight });
-      saveLayout({ panelHeight, splitRatio: get().splitRatio, showMinimap: get().showMinimap });
+      set({ panelHeight: Math.max(120, Math.min(720, h)) });
+      keepLayout(get());
     },
     setSplitRatio: (r) => {
-      const splitRatio = Math.max(0.2, Math.min(0.85, r));
-      set({ splitRatio });
-      saveLayout({ panelHeight: get().panelHeight, splitRatio, showMinimap: get().showMinimap });
+      set({ splitRatio: Math.max(0.2, Math.min(0.85, r)) });
+      keepLayout(get());
     },
     toggleMinimap: () => {
-      const showMinimap = !get().showMinimap;
-      set({ showMinimap });
-      saveLayout({ panelHeight: get().panelHeight, splitRatio: get().splitRatio, showMinimap });
+      set({ showMinimap: !get().showMinimap });
+      keepLayout(get());
+    },
+    setTheme: (theme) => {
+      set({ theme });
+      keepLayout(get());
     },
     undo: () => {
       const { past, future, nodes, edges } = get();
