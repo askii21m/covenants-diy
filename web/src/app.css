@@ -2099,3 +2099,133 @@ textarea {
 .menu.menu-rules {
   min-width: 340px;
 }
+
+/* ---------- narrow screens ---------- */
+
+/* Three panes cannot all hold their ground on a phone. The library alone is
+   212px of a 375px screen, and what it leaves the canvas is too little to
+   read a graph in. Both side panes come out of the grid and become layers
+   over the canvas, so the canvas keeps the screen it needs. */
+@media (max-width: 780px) {
+  .app {
+    grid-template-rows: 46px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "top" "cv";
+  }
+
+  /* The header held 491px of controls in a 375px viewport, and the overhang
+     is what made the whole document scroll sideways. Network, ruleset, and
+     the source link move into the drawer; what remains is trimmed to fit. */
+  .top {
+    padding: 0 8px 0 12px;
+  }
+  .acts[role="menubar"] .act {
+    padding: 5px 8px;
+  }
+  .drawer {
+    align-self: center;
+    padding: 5px 11px;
+    font-size: 13px;
+    color: var(--t2);
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: var(--r-s);
+    cursor: pointer;
+  }
+  .drawer[aria-expanded="true"] {
+    color: var(--t);
+    background: var(--canvas);
+  }
+
+  .lib {
+    position: fixed;
+    top: 46px;
+    bottom: 0;
+    left: 0;
+    width: min(78vw, 300px);
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 180ms ease;
+    overscroll-behavior: contain;
+  }
+  .nav-open .lib {
+    transform: none;
+  }
+  .scrim {
+    position: fixed;
+    inset: 46px 0 0;
+    z-index: 35;
+    background: rgb(0 0 0 / 30%);
+  }
+
+  /* In the header these stood side by side in their own columns. At the foot
+     of the drawer they read as rows instead. */
+  .lib .sel,
+  .lib .gh {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+  .lib .sel {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+    padding: 11px 16px;
+  }
+  .lib .gh {
+    padding: 12px 16px;
+  }
+
+  /* Nothing to drag when the panel no longer shares an edge with the canvas. */
+  .div {
+    display: none;
+  }
+
+  /* The panel becomes a sheet, parked with only its handle in view so a tap
+     brings it up and the canvas is otherwise whole. */
+  .panel {
+    --grab: 34px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: min(54vh, 460px);
+    z-index: 30;
+    border-top: 1px solid var(--line);
+    transform: translateY(calc(100% - var(--grab)));
+    transition: transform 180ms ease;
+  }
+  .sheet-open .panel {
+    transform: none;
+  }
+  .grab {
+    flex: none;
+    width: 100%;
+    height: var(--grab);
+    padding: 0;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+  .grab::before {
+    content: "";
+    display: block;
+    width: 38px;
+    height: 4px;
+    margin: 15px auto;
+    border-radius: 2px;
+    background: var(--t3);
+  }
+  /* The handle is a sibling now, so the panel's height is no longer the
+     detail's to take whole. */
+  .panel .detail {
+    flex: 1;
+    height: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lib,
+  .panel {
+    transition: none;
+  }
+}

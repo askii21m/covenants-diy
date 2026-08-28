@@ -75,15 +75,93 @@ function exportJson() {
   URL.revokeObjectURL(a.href);
 }
 
-function TopBar({ openMenu, open }: { openMenu: OpenMenu; open: MenuName | null }) {
+/** The one breakpoint. Under it the library is 212px of a 375px screen and
+ *  the canvas gets the remainder, which is too little to read a graph in.
+ *  Both side panes become layers over the canvas instead. */
+const NARROW = "(max-width: 780px)";
+
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches);
+  useEffect(() => {
+    // Off resize rather than the query's own change event: a rotation and a
+    // window drag both raise it, and every browser sends it, including the
+    // ones where addEventListener on a MediaQueryList does nothing.
+    const sync = () => setNarrow(window.matchMedia(NARROW).matches);
+    window.addEventListener("resize", sync);
+    sync();
+    return () => window.removeEventListener("resize", sync);
+  }, []);
+  return narrow;
+}
+
+/** Network, ruleset, and the link to the source. These sit in the header
+ *  when it has the width for them, and at the foot of the node drawer when
+ *  it does not. */
+function Chrome({ openMenu, open }: { openMenu: OpenMenu; open: MenuName | null }) {
   const network = useStore((s) => s.network);
   const ruleset = useStore((s) => s.ruleset);
   const setNetwork = useStore((s) => s.setNetwork);
+  const rules = useRef<HTMLButtonElement>(null);
+  return (
+    <>
+        <label className="sel">
+          <span>network</span>
+          <select value={network} onChange={(e) => setNetwork(e.target.value as (typeof NETWORKS)[number])}>
+            {NETWORKS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="sel">
+          <span>assume active</span>
+          <button
+            ref={rules}
+            className="sel-btn"
+            aria-haspopup="menu"
+            aria-expanded={open === "rules"}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              openMenu("rules", rules.current!);
+            }}
+          >
+            {summaryOf(flagsOf(ruleset))}
+          </button>
+        </label>
+        <a
+          className="gh"
+          href="https://github.com/askii21m/covenants-diy"
+          target="_blank"
+          rel="noreferrer noopener"
+          title="Source on GitHub"
+          aria-label="Source on GitHub"
+        >
+          <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true" focusable="false">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
+          </svg>
+        </a>
+    </>
+  );
+}
+
+function TopBar({
+  openMenu,
+  open,
+  narrow,
+  navOpen,
+  setNavOpen,
+}: {
+  openMenu: OpenMenu;
+  open: MenuName | null;
+  narrow: boolean;
+  navOpen: boolean;
+  setNavOpen: (v: boolean) => void;
+}) {
   const refs = {
     file: useRef<HTMLButtonElement>(null),
     edit: useRef<HTMLButtonElement>(null),
     view: useRef<HTMLButtonElement>(null),
-    rules: useRef<HTMLButtonElement>(null),
   };
   return (
     <header className="top">
@@ -128,43 +206,13 @@ function TopBar({ openMenu, open }: { openMenu: OpenMenu; open: MenuName | null 
         ))}
       </nav>
       <div className="sp" />
-      <label className="sel">
-        <span>network</span>
-        <select value={network} onChange={(e) => setNetwork(e.target.value as (typeof NETWORKS)[number])}>
-          {NETWORKS.map((n) => (
-            <option key={n} value={n}>
-              {n}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="sel">
-        <span>assume active</span>
-        <button
-          ref={refs.rules}
-          className="sel-btn"
-          aria-haspopup="menu"
-          aria-expanded={open === "rules"}
-          onMouseDown={(e) => {
-            e.preventDefault();
-            openMenu("rules", refs.rules.current!);
-          }}
-        >
-          {summaryOf(flagsOf(ruleset))}
+      {narrow ? (
+        <button className="drawer" aria-expanded={navOpen} onClick={() => setNavOpen(!navOpen)}>
+          nodes
         </button>
-      </label>
-      <a
-        className="gh"
-        href="https://github.com/askii21m/covenants-diy"
-        target="_blank"
-        rel="noreferrer noopener"
-        title="Source on GitHub"
-        aria-label="Source on GitHub"
-      >
-        <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true" focusable="false">
-          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-        </svg>
-      </a>
+      ) : (
+        <Chrome openMenu={openMenu} open={open} />
+      )}
     </header>
   );
 }
@@ -380,6 +428,37 @@ export default function App() {
   const setRuleset = useStore((s) => s.setRuleset);
   const flags = flagsOf(ruleset);
   const [menu, setMenu] = useState<{ which: MenuName; x: number; y: number; trigger: HTMLElement } | null>(null);
+  const narrow = useNarrow();
+  const [navOpen, setNavOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const selected = useStore((s) => s.selected);
+  const active = useStore((s) => s.active);
+  const placing = useStore((s) => s.placing);
+  // Choosing a node from the drawer means the next tap lands it on the
+  // canvas, which the drawer is covering.
+  useEffect(() => {
+    if (placing) setNavOpen(false);
+  }, [placing]);
+  // Selecting a node is the reason to want the panel, but a document that
+  // arrives with something already selected is not the reader asking for
+  // it, and half the screen is too much to take before they have touched
+  // anything. The first selection each document carries is its own.
+  const armed = useRef<string | null>(null);
+  useEffect(() => {
+    if (armed.current !== active) {
+      armed.current = active;
+      return;
+    }
+    if (selected) setSheetOpen(true);
+  }, [selected, active]);
+  // Widening puts both panes back in the grid, where an open flag would
+  // otherwise linger and reopen them on the next narrowing.
+  useEffect(() => {
+    if (!narrow) {
+      setNavOpen(false);
+      setSheetOpen(false);
+    }
+  }, [narrow]);
   // Counted, not boolean, so the same message twice re-announces and
   // resets the timer.
   const [toast, setToast] = useState<{ n: number; text: string } | null>(null);
@@ -513,9 +592,19 @@ export default function App() {
 
   return (
     <ReactFlowProvider>
-      <div className="app" style={{ ["--panel" as string]: `${panelHeight}px` }}>
-        <TopBar openMenu={openMenu} open={menu?.which ?? null} />
-        <Library />
+      <div
+        className={`app${narrow ? " narrow" : ""}${navOpen ? " nav-open" : ""}${sheetOpen ? " sheet-open" : ""}`}
+        style={{ ["--panel" as string]: `${panelHeight}px` }}
+      >
+        <TopBar
+          openMenu={openMenu}
+          open={menu?.which ?? null}
+          narrow={narrow}
+          navOpen={navOpen}
+          setNavOpen={setNavOpen}
+        />
+        <Library>{narrow && <Chrome openMenu={openMenu} open={menu?.which ?? null} />}</Library>
+        {narrow && navOpen && <div className="scrim" onClick={() => setNavOpen(false)} />}
         <main className="cv">
           {saveError && <SaveBanner />}
           <Tabs openMenu={openMenu} />
@@ -524,6 +613,14 @@ export default function App() {
         </main>
         <Divider />
         <section className="panel">
+          {narrow && (
+            <button
+              className="grab"
+              aria-expanded={sheetOpen}
+              aria-label={sheetOpen ? "Hide the panel" : "Show the panel"}
+              onClick={() => setSheetOpen(!sheetOpen)}
+            />
+          )}
           <Detail />
         </section>
         {menu && (

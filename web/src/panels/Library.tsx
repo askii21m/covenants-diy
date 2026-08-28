@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { CATEGORIES, KINDS } from "../registry";
 import { useStore } from "../store";
 
-export function Library() {
+export function Library({ children }: { children?: ReactNode }) {
   const [q, setQ] = useState("");
   const placing = useStore((s) => s.placing);
   const setPlacing = useStore((s) => s.setPlacing);
@@ -48,6 +48,7 @@ export function Library() {
           </div>
         );
       })}
+      {children}
     </aside>
   );
 }

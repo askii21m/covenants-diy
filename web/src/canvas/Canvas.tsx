@@ -100,7 +100,15 @@ export function Canvas() {
       // A document of nothing but comments and knots frames all of them:
       // fitView with an empty node list matches nothing and would leave the
       // previous document's viewport in place.
-      const real = nodes.filter((n) => n.data.kind !== "comment" && n.data.kind !== "reroute").slice(0, 6);
+      // How many of them to frame follows the width on hand. A covenant node
+      // is around 260px and stops being readable below about 0.62, so six of
+      // them want roughly 1600px. Asking a phone's 375 for six lands on the
+      // zoom floor instead, where a 13.5px label draws at under 3px.
+      const NODE_W = 260;
+      const READABLE = 0.62;
+      const room = wrapper.current?.clientWidth ?? 1200;
+      const most = Math.max(1, Math.min(6, Math.floor(room / (NODE_W * READABLE))));
+      const real = nodes.filter((n) => n.data.kind !== "comment" && n.data.kind !== "reroute").slice(0, most);
       const ids = (real.length ? real : nodes).map((n) => n.id);
       if (!isMeasured(ids)) return;
       rf.fitView({ nodes: ids.map((id) => ({ id })), padding: 0.12, maxZoom: 1, duration: 0 });
