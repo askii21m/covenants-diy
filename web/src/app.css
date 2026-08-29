@@ -144,12 +144,11 @@
   --hd-covenants: #16302c;
   --hd-transactions: #17222f;
   --hd-bytes: #1e2725;
-  /* A grid reads as loudly as its contrast against the ground behind it,
-     so these hold the same ratio the daylight grid does, 1.07 and 1.18,
-     rather than the same distance in channel values. Matching the numbers
-     instead of the ratio put the major grid at 1.34, near double. */
-  --grid-minor: #151c1a;
-  --grid-major: #1b2422;
+  /* What separates the two is the ratio between them, not their absolute
+     weights: daylight draws the subgrid at 39% of the major's, and these
+     hold 36% of it. */
+  --grid-minor: #141b19;
+  --grid-major: #1a2422;
   --mm-mask: rgb(16 22 21 / 68%);
   --mm-node: #33403e;
   --mm-comment: #41504d;
@@ -627,6 +626,13 @@ textarea {
 .react-flow__connectionline {
   stroke: var(--a);
   stroke-width: 2;
+}
+/* Two of these stack, one grid each, and in dark mode React Flow gives both
+   an opaque ground of its own. The second then paints over the first and the
+   subgrid disappears entirely, whatever colour it is. The ground belongs to
+   the canvas underneath, so neither should carry one. */
+.react-flow__background {
+  background: transparent;
 }
 .react-flow__minimap {
   border: 1px solid var(--line);
