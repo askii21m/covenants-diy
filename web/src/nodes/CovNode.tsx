@@ -124,9 +124,11 @@ function CovNodeImpl({ id, data, selected }: NodeProps<FlowNode>) {
     return e ? allComputed[e.source]?.outputs[e.sourceHandle ?? "value"] : undefined;
   };
   const status = computed?.status ?? "ok";
+  // A count the node inherits from what feeds it is not its to change.
+  const inherited = new Set<string>(kind.derives?.counts ?? []);
   const counts: Array<[string, string, number]> = [];
-  if ("nIn" in data) counts.push(["nIn", "input", 1]);
-  if ("nOut" in data) counts.push(["nOut", "output", 1]);
+  if ("nIn" in data && !inherited.has("nIn")) counts.push(["nIn", "input", 1]);
+  if ("nOut" in data && !inherited.has("nOut")) counts.push(["nOut", "output", 1]);
   if ("nLeaves" in data) counts.push(["nLeaves", "leaf", 1]);
   if ("nItems" in data) counts.push(["nItems", "item", 0]);
   if ("nParts" in data) counts.push(["nParts", "part", 2]);

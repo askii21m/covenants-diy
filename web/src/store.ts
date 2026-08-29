@@ -16,16 +16,17 @@ import {
 } from "@xyflow/react";
 import {
   KINDS,
-  portsCompatible,
   findPort,
   firstCompatibleInput,
   firstCompatibleOutput,
+  normalise,
   outOfRange,
-  type NodeFields,
+  portsCompatible,
   type Computed,
-  type Value,
-  type PortType,
+  type NodeFields,
   type Port,
+  type PortType,
+  type Value,
 } from "./registry";
 import { flagsOf, isRuleset, NETWORKS, type Network } from "./engine";
 
@@ -469,7 +470,12 @@ function pruneEdges(nodes: FlowNode[], edges: Edge[]): Edge[] {
 export const useStore = create<State>((set, get) => {
   const recompute = (partial: Partial<State> = {}) => {
     const s = { ...get(), ...partial };
-    set({ ...partial, computed: evaluate(s.nodes, s.edges, s.network, s.ruleset) });
+    // A node whose ports are the shape of what feeds it has to be told that
+    // shape before anything reads those ports, the prune below included.
+    // Idempotent, so undo and redo pass back through it without drifting.
+    const nodes = normalise(s.nodes, s.edges);
+    const edges = nodes === s.nodes ? s.edges : pruneEdges(nodes, s.edges);
+    set({ ...partial, nodes, edges, computed: evaluate(nodes, edges, s.network, s.ruleset) });
   };
   /** A structural change: snapshot for undo, then recompute. */
   const commit = (partial: Partial<State>) => {

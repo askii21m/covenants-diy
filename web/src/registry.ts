@@ -152,6 +152,19 @@ export interface NodeKind {
   inputs: (fields: NodeFields) => Port[];
   outputs: (fields: NodeFields) => Port[];
   compute: (fields: NodeFields, wired: Record<string, Value>, ctx: Context) => Computed;
+  /** How many inputs and outputs the value this kind emits describes. A
+   *  template answers for the transaction built from it. */
+  shape?: (fields: NodeFields) => Shape;
+  /** Counts this kind does not choose. It wears the shape of whatever is
+   *  wired into the named port, so its ports and that value can never
+   *  disagree. Unwired, its own fields stand. */
+  derives?: { from: string; counts: readonly (keyof Shape)[] };
+}
+
+/** Input and output counts, as one node reports them to the next. */
+export interface Shape {
+  nIn: number;
+  nOut: number;
 }
 
 const P = (id: string, label: string, type: PortType, field?: Port["field"], wide?: boolean): Port =>
@@ -234,6 +247,7 @@ const template: NodeKind = {
     ports.push(P("template", "template hex", "tx"));
     return ports;
   },
+  shape: (f) => ({ nIn: count(f, "nIn", 1), nOut: count(f, "nOut", 1) }),
   compute: (f, w) => {
     const nIn = count(f, "nIn", 1),
       nOut = count(f, "nOut", 1);
@@ -360,12 +374,20 @@ const transaction: NodeKind = {
   category: "Transactions",
   description: "A template bound to prevouts and witnesses. Emits hex, txid and an outpoint per output.",
   defaults: () => ({ name: "tx", nIn: 1, nOut: 1 }),
+  // realize() walks the deserialized template and pays no attention to
+  // counts held here, so holding a different pair only ever misdraws the
+  // node. It takes them from the template instead.
+  derives: { from: "template", counts: ["nIn", "nOut"] },
+  shape: (f) => ({ nIn: count(f, "nIn", 1), nOut: count(f, "nOut", 1) }),
   inputs: (f) => {
     const ports: Port[] = [P("template", "template", "tx")];
     for (let i = 0; i < count(f, "nIn", 1); i++) {
+      // Which coin, then how much it holds, then the proof it may be
+      // spent. The amount describes the prevout, so it belongs beside it
+      // rather than on the far side of the witness.
       ports.push(P(`prevout${i}`, `prevout[${i}]`, "outpoint", "text"));
-      ports.push(opt(P(`witness${i}`, `witness[${i}]`, "witness")));
       ports.push(N(`value${i}`, `value[${i}] sat`, 0, MAX_MONEY));
+      ports.push(opt(P(`witness${i}`, `witness[${i}]`, "witness")));
     }
     return ports;
   },
@@ -707,6 +729,10 @@ const reroute: NodeKind = {
   inputs: () => [P("in", "", "any")],
   outputs: () => [P("out", "", "any")],
   compute: (_f, w) => ({ outputs: { out: w.in ?? null } }),
+  // A knot carries shape along with the value, so routing a wire around
+  // something does not change what the far end is told.
+  derives: { from: "in", counts: ["nIn", "nOut"] },
+  shape: (f) => ({ nIn: count(f, "nIn", 1), nOut: count(f, "nOut", 1) }),
 };
 
 /** A labelled box behind other nodes. Moving it moves what is inside. */
@@ -897,6 +923,66 @@ export const KINDS: Record<string, NodeKind> = Object.fromEntries(
   ].map((k) => [k.kind, k]),
 );
 export const CATEGORIES = ["Covenants", "Transactions", "Keys", "Bytes", "Canvas"];
+
+/** Just enough of an edge to follow one backwards. */
+interface Wire {
+  source: string;
+  target: string;
+  targetHandle?: string | null;
+}
+
+/** Writes into every node the counts it does not own, taken from the shape
+ *  of whatever is wired into it. Reads fields and edges only, never a
+ *  computed value, so it settles in one pass and the ports it decides can
+ *  never depend on their own result.
+ *
+ *  Returns the array it was given when nothing moved, so a graph with no
+ *  derived node costs one walk and no re-render. */
+export function normalise<N extends { id: string; data: NodeFields }>(nodes: N[], edges: Wire[]): N[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const feeding = new Map<string, string>();
+  for (const e of edges) if (e.targetHandle) feeding.set(`${e.target}\u0000${e.targetHandle}`, e.source);
+
+  const done = new Map<string, NodeFields>();
+  const open = new Set<string>();
+  /** A node's fields with its inherited counts filled in. */
+  const fieldsOf = (id: string): NodeFields => {
+    const cached = done.get(id);
+    if (cached) return cached;
+    const node = byId.get(id);
+    if (!node) return { name: "" };
+    const kind = KINDS[node.data.kind as string];
+    let fields = node.data;
+    // `open` is the path currently being resolved. A graph may hold a cycle,
+    // and a node inside one inherits nothing rather than recurring forever.
+    if (kind?.derives && !open.has(id)) {
+      open.add(id);
+      const src = feeding.get(`${id}\u0000${kind.derives.from}`);
+      const from = src === undefined ? undefined : byId.get(src);
+      const shape = from && KINDS[from.data.kind as string]?.shape?.(fieldsOf(src!));
+      // Only a real difference earns a new object. Rebuilding one whose
+      // values already match would report movement on every pass, and
+      // every pass would hand React Flow a fresh node to redraw.
+      if (shape && kind.derives.counts.some((k) => node.data[k] !== shape[k])) {
+        const patch: Record<string, unknown> = {};
+        for (const k of kind.derives.counts) patch[k] = shape[k];
+        fields = { ...node.data, ...patch };
+      }
+      open.delete(id);
+    }
+    done.set(id, fields);
+    return fields;
+  };
+
+  let moved = false;
+  const next = nodes.map((n) => {
+    const fields = fieldsOf(n.id);
+    if (fields === n.data) return n;
+    moved = true;
+    return { ...n, data: fields };
+  });
+  return moved ? next : nodes;
+}
 
 /** Port lookup for connection validation and wire colouring. */
 export function findPort(fields: NodeFields, side: "source" | "target", id: string): Port | undefined {
