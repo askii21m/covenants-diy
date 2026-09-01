@@ -7,7 +7,7 @@ import init from "../pkg/covenants.js";
 import { EXAMPLES, heightOf, shapeOf, MEASURED_HEIGHTS, minHeightFor } from "../src/examples";
 import { FLAGS, shortLabel } from "../src/engine";
 import { evaluate } from "../src/store";
-import { KINDS } from "../src/registry";
+import { KINDS, MAX_MONEY, normalise } from "../src/registry";
 
 beforeAll(async () => {
   await init({ module_or_path: await readFile(new URL("../pkg/covenants_bg.wasm", import.meta.url)) });
@@ -300,5 +300,113 @@ describe("node heights", () => {
       }
     }
     expect(short, "measure these in the browser and add them to MEASURED").toEqual([]);
+  });
+});
+
+/** The node feeding a port, following knots back to something real. */
+function feeding(f: { nodes: FlowNodeish[]; edges: Edgeish[] }, id: string, port: string) {
+  const byId = new Map(f.nodes.map((n) => [n.id, n]));
+  let cur = id;
+  let p = port;
+  for (let i = 0; i < 12; i++) {
+    const e = f.edges.find((x) => x.target === cur && x.targetHandle === p);
+    if (!e) return undefined;
+    const src = byId.get(e.source);
+    if (!src) return undefined;
+    if (src.data.kind !== "reroute") return src;
+    cur = src.id;
+    p = "in";
+  }
+  return undefined;
+}
+type FlowNodeish = { id: string; data: Record<string, unknown> };
+type Edgeish = { source: string; target: string; sourceHandle?: string | null; targetHandle?: string | null };
+
+describe("transactions no chain would accept", () => {
+  it("refuses to call the same coin spent twice a bigger fee", () => {
+    const f = EXAMPLES.vault.build();
+    const before = evaluate(f.nodes, f.edges, f.network, f.ruleset);
+    const tx = f.nodes.find(
+      (n) => n.data.kind === "transaction" && typeof (before[n.id]?.extra as { fee?: number })?.fee === "number",
+    )!;
+    const fee = (before[tx.id].extra as { fee: number }).fee;
+
+    // Give the template a second input, then point both at the same coin.
+    const template = feeding(f as never, tx.id, "template")!;
+    template.data.nIn = 2;
+    for (const port of ["prevout", "value", "witness"]) {
+      const e = f.edges.find((x) => x.target === tx.id && x.targetHandle === `${port}0`);
+      if (e) f.edges.push({ ...e, id: `${e.id}-dup`, targetHandle: `${port}1` });
+    }
+
+    const after = evaluate(normalise(f.nodes, f.edges), f.edges, f.network, f.ruleset);
+    const r = after[tx.id];
+    expect(r.status, `spending one coin twice reported "${r.message}"`).toBe("error");
+    expect(r.message).toContain("spent twice");
+    // It must not offer a fee at all: the one it computed counts the coin
+    // twice, so showing it would be worse than showing nothing.
+    expect(r.message, `still quoted a fee: "${r.message}"`).not.toContain("fee");
+    expect(fee).toBeGreaterThan(0);
+  });
+
+  it("refuses outputs totalling more than has ever existed", () => {
+    const f = EXAMPLES.vault.build();
+    const before = evaluate(f.nodes, f.edges, f.network, f.ruleset);
+    const tx = f.nodes.find(
+      (n) => n.data.kind === "transaction" && typeof (before[n.id]?.extra as { fee?: number })?.fee === "number",
+    )!;
+    const template = feeding(f as never, tx.id, "template")!;
+    template.data.nOut = 2;
+    // out0_spk arrives over a wire, so the second output needs its own.
+    template.data.out1_spk = "512079be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+    template.data.out0_value = MAX_MONEY;
+    template.data.out1_value = MAX_MONEY;
+
+    const after = evaluate(normalise(f.nodes, f.edges), f.edges, f.network, f.ruleset);
+    const r = after[tx.id];
+    expect(r.status, `an impossible total reported "${r.message}"`).toBe("error");
+    expect(r.message).toContain("more than has ever existed");
+  });
+});
+
+describe("a transaction whose outputs are worth more than its inputs", () => {
+  it("reports an error rather than a fee with a minus in front of it", () => {
+    const f = EXAMPLES.vault.build();
+    const byId = new Map(f.nodes.map((n) => [n.id, n]));
+    /** The node feeding a port, following knots back to something real. */
+    const feeding = (id: string, port: string) => {
+      let cur = id;
+      let p = port;
+      for (let i = 0; i < 12; i++) {
+        const e = f.edges.find((x) => x.target === cur && x.targetHandle === p);
+        if (!e) return undefined;
+        const src = byId.get(e.source);
+        if (!src) return undefined;
+        if (src.data.kind !== "reroute") return src;
+        cur = src.id;
+        p = "in";
+      }
+      return undefined;
+    };
+
+    const before = evaluate(f.nodes, f.edges, f.network, f.ruleset);
+    // Only a transaction whose prevout values are all known has a fee at all.
+    const tx = f.nodes.find(
+      (n) => n.data.kind === "transaction" && typeof (before[n.id]?.extra as { fee?: number })?.fee === "number",
+    );
+    expect(tx, "the vault example no longer has a transaction with a known fee").toBeTruthy();
+    const fee = (before[tx!.id].extra as { fee: number }).fee;
+    expect(before[tx!.id].status).toBe("ok");
+
+    const template = feeding(tx!.id, "template");
+    expect(template?.data.kind, "expected a template behind the transaction").toBe("template");
+    // Push the single output past the coin being spent.
+    template!.data.out0_value = Number(template!.data.out0_value) + fee + 50_000;
+
+    const after = evaluate(f.nodes, f.edges, f.network, f.ruleset);
+    const result = after[tx!.id];
+    expect((result.extra as { fee: number }).fee).toBeLessThan(0);
+    expect(result.status, `a transaction printing money reported "${result.message}"`).toBe("error");
+    expect(result.message).toContain("outputs exceed inputs");
   });
 });

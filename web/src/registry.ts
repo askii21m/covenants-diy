@@ -422,6 +422,34 @@ const transaction: NodeKind = {
       v.output_values.forEach((n, j) => (out[`outvalue${j}`] = String(n)));
       v.output_scripts.forEach((h, j) => (out[`outspk${j}`] = h));
       const parts = [`${v.vsize} vB`];
+      // Three ways a transaction is invalid whatever its fee reads. These are
+      // consensus rules rather than relay policy, so they are errors: no
+      // chain anywhere accepts the result. Dust and zero-value outputs are
+      // deliberately absent, being policy, and a covenant output may carry
+      // state rather than value.
+      //
+      // The coin spent twice comes first, because it is the one that also
+      // lies: its value is counted on both inputs, so the fee reads higher
+      // than the transaction could ever pay.
+      const spent = prevouts.filter(Boolean);
+      const twice = spent.find((o, i) => spent.indexOf(o) !== i);
+      if (twice) {
+        parts.push(`the same coin is spent twice: ${twice}`);
+        return { outputs: out, status: "error", message: parts.join(" · "), extra: v };
+      }
+      const outSum = v.output_values.reduce((a: number, n) => a + Number(n), 0);
+      if (outSum > MAX_MONEY) {
+        parts.push(`outputs total ${outSum} sat, more than has ever existed`);
+        return { outputs: out, status: "error", message: parts.join(" · "), extra: v };
+      }
+      // Outputs worth more than the inputs is not an expensive transaction,
+      // it is one no chain will ever accept. The outputs still stand so the
+      // hex can be read, but the node says so rather than showing a fee with
+      // a minus in front of it and a green light beside it.
+      if (v.fee != null && v.fee < 0) {
+        parts.push(`outputs exceed inputs by ${-v.fee} sat`);
+        return { outputs: out, status: "error", message: parts.join(" · "), extra: v };
+      }
       if (v.fee != null) parts.push(`fee ${v.fee}`);
       parts.push(v.complete ? "complete" : "incomplete");
       return { outputs: out, status: v.complete ? "ok" : "warn", message: parts.join(" · "), extra: v };
