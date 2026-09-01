@@ -958,6 +958,11 @@ textarea {
 }
 .cov .ft .msg {
   margin-left: auto;
+  /* Whatever a node has to say has to fit inside it. A flex item will not
+     shrink below its content without this, and a long hex string has no
+     break of its own to take. */
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .cov .ft .msg.ok {
   color: var(--a);

@@ -434,7 +434,12 @@ const transaction: NodeKind = {
       const spent = prevouts.filter(Boolean);
       const twice = spent.find((o, i) => spent.indexOf(o) !== i);
       if (twice) {
-        parts.push(`the same coin is spent twice: ${twice}`);
+        // Enough of the outpoint to tell one coin from another. The pin above
+        // carries it in full, and all 64 characters of txid here have nowhere
+        // to break, so they used to run out past the side of the node.
+        const colon = twice.lastIndexOf(":");
+        const which = colon > 12 ? `${twice.slice(0, 12)}…${twice.slice(colon)}` : twice;
+        parts.push(`the same coin is spent twice: ${which}`);
         return { outputs: out, status: "error", message: parts.join(" · "), extra: v };
       }
       const outSum = v.output_values.reduce((a: number, n) => a + Number(n), 0);
