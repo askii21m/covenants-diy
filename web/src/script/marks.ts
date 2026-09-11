@@ -111,3 +111,35 @@ export const hover = hoverTooltip(
   },
   { hideOnChange: true },
 );
+
+/** The word an execution step ran, while a trace is being stepped. */
+export interface StepMark {
+  from: number;
+  to: number;
+  failed: boolean;
+}
+export const setStep = StateEffect.define<StepMark | null>();
+export const stepField = StateField.define<StepMark | null>({
+  create: () => null,
+  update(value, tr) {
+    for (const e of tr.effects) if (e.is(setStep)) return e.value;
+    // The script a mark sits in can be edited from another node before the
+    // next step arrives; mapping keeps the mark on its word until then.
+    if (value && tr.docChanged)
+      return { ...value, from: tr.changes.mapPos(value.from), to: tr.changes.mapPos(value.to) };
+    return value;
+  },
+});
+
+const stepRan = Decoration.mark({ class: "cm-step" });
+const stepFailed = Decoration.mark({ class: "cm-step cm-step-fail" });
+export const stepMarks = EditorView.decorations.compute(["doc", stepField], (state) => {
+  const s = state.field(stepField);
+  if (!s) return Decoration.none;
+  const to = Math.min(s.to, state.doc.length);
+  const from = Math.min(s.from, to);
+  if (from >= to) return Decoration.none;
+  const builder = new RangeSetBuilder<Decoration>();
+  builder.add(from, to, s.failed ? stepFailed : stepRan);
+  return builder.finish();
+});

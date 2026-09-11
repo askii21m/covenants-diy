@@ -23,7 +23,7 @@ import { linter, lintGutter, type Diagnostic } from "@codemirror/lint";
 import { bracketMatching } from "@codemirror/language";
 import { tapscript, highlighting } from "./language";
 import { completions, type Refs } from "./complete";
-import { refsField, refMarks, hover, setRefs } from "./marks";
+import { refsField, refMarks, hover, setRefs, setStep, stepField, stepMarks, type StepMark } from "./marks";
 import { useStore, registerPendingEdit } from "../store";
 
 function tooltipHost(): HTMLElement {
@@ -47,30 +47,47 @@ export interface ScriptError {
   message: string;
 }
 
-/** The character range of the word the assembler pointed at, so the
- *  squiggle sits under the word rather than the whole line. */
-function errorRange(doc: string, err: ScriptError): { from: number; to: number } {
+/** The character range of a word, so a mark sits under the word rather
+ *  than the whole line. */
+export function wordRange(doc: string, line: number, word: number): { from: number; to: number } {
   const lines = doc.split("\n");
-  const line = lines[err.line] ?? "";
+  const text = lines[line] ?? "";
   let at = 0;
-  for (let i = 0; i < err.line && i < lines.length; i++) at += lines[i].length + 1;
-  // An error arrives one render behind the text it describes, so deleting
-  // the last line leaves a position past the end of the shorter document,
-  // which CodeMirror rejects outright.
+  for (let i = 0; i < line && i < lines.length; i++) at += lines[i].length + 1;
+  // A position arrives one render behind the text it describes, so deleting
+  // the last line leaves one past the end of the shorter document, which
+  // CodeMirror rejects outright.
   const clamp = (n: number) => Math.max(0, Math.min(n, doc.length));
   // Words are whitespace-separated; comments do not count.
-  const code = line.split("#")[0];
+  const code = text.split("#")[0];
   const re = /\S+/g;
   let m: RegExpExecArray | null,
     n = 0;
   while ((m = re.exec(code))) {
-    if (n === err.word) return { from: clamp(at + m.index), to: clamp(at + m.index + m[0].length) };
+    if (n === word) return { from: clamp(at + m.index), to: clamp(at + m.index + m[0].length) };
     n++;
   }
-  return { from: clamp(at), to: clamp(at + line.length) };
+  return { from: clamp(at), to: clamp(at + text.length) };
 }
 
-export function Editor({ id, source, error, refs }: { id: string; source: string; error?: ScriptError; refs: Refs[] }) {
+const errorRange = (doc: string, err: ScriptError) => wordRange(doc, err.line, err.word);
+
+export function Editor({
+  id,
+  source,
+  error,
+  refs,
+  readOnly = false,
+  mark = null,
+}: {
+  id: string;
+  source: string;
+  error?: ScriptError;
+  refs: Refs[];
+  /** Fixed for the life of the editor: a viewer never becomes an editor. */
+  readOnly?: boolean;
+  mark?: StepMark | null;
+}) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const lintC = useRef(new Compartment());
@@ -104,8 +121,46 @@ export function Editor({ id, source, error, refs }: { id: string; source: string
       pendingText.current = null;
       commit(v, pendingId.current);
     };
-    const unregister = registerPendingEdit(flush);
+    const unregister = readOnly ? () => {} : registerPendingEdit(flush);
 
+    // Reading needs the language, the marks and the hover. Editing adds
+    // history, completion and the commit path; a viewer has none of these,
+    // so nothing in it can ever reach the store.
+    const editing = readOnly
+      ? [EditorState.readOnly.of(true), EditorView.editable.of(false)]
+      : [
+          highlightActiveLineGutter(),
+          highlightActiveLine(),
+          history(),
+          rectangularSelection(),
+          crosshairCursor(),
+          bracketMatching(),
+          closeBrackets(),
+          autocompletion({
+            override: [completions(() => live.current.refs)],
+            activateOnTyping: true,
+            icons: false,
+            maxRenderedOptions: 40,
+          }),
+          cmPlaceholder("A tapscript. Type OP_ for the opcodes, @ for a wired value."),
+          keymap.of([
+            { key: "Mod-/", run: toggleComment },
+            ...closeBracketsKeymap,
+            ...completionKeymap,
+            ...historyKeymap,
+            indentWithTab,
+            ...defaultKeymap,
+          ]),
+          EditorView.updateListener.of((u) => {
+            if (u.docChanged) schedule(u.state.doc.toString(), live.current.id);
+          }),
+          EditorView.domEventHandlers({
+            blur: () => {
+              flush();
+              return false;
+            },
+          }),
+        ];
     const state = EditorState.create({
       doc: source,
       extensions: [
@@ -117,46 +172,18 @@ export function Editor({ id, source, error, refs }: { id: string; source: string
         // exactly one screen.
         tooltips({ parent: tooltipHost(), position: "fixed" }),
         lineNumbers(),
-        highlightActiveLineGutter(),
-        highlightActiveLine(),
-        history(),
         drawSelection(),
-        rectangularSelection(),
-        crosshairCursor(),
-        bracketMatching(),
-        closeBrackets(),
         tapscript,
         highlighting,
         refsField,
         refMarks,
+        stepField,
+        stepMarks,
         hover,
-        autocompletion({
-          override: [completions(() => live.current.refs)],
-          activateOnTyping: true,
-          icons: false,
-          maxRenderedOptions: 40,
-        }),
         lintGutter(),
         lintC.current.of(linter(() => [])),
-        cmPlaceholder("A tapscript. Type OP_ for the opcodes, @ for a wired value."),
-        keymap.of([
-          { key: "Mod-/", run: toggleComment },
-          ...closeBracketsKeymap,
-          ...completionKeymap,
-          ...historyKeymap,
-          indentWithTab,
-          ...defaultKeymap,
-        ]),
+        ...editing,
         EditorView.lineWrapping,
-        EditorView.updateListener.of((u) => {
-          if (u.docChanged) schedule(u.state.doc.toString(), live.current.id);
-        }),
-        EditorView.domEventHandlers({
-          blur: () => {
-            flush();
-            return false;
-          },
-        }),
         EditorView.theme({
           "&": { height: "100%", fontSize: "13px" },
           ".cm-scroller": { fontFamily: "var(--mono)", lineHeight: "1.55" },
@@ -209,6 +236,23 @@ export function Editor({ id, source, error, refs }: { id: string; source: string
     };
     v.dispatch({ effects: lintC.current.reconfigure(linter(make, { delay: 0 })) });
   }, [error?.line, error?.word, error?.message, source]);
+
+  // The step under the trace's cursor, as a mark on the word that ran,
+  // brought into view because a script can outgrow the pane. Keyed on the
+  // three values rather than the object, which is rebuilt every render.
+  const from = mark?.from,
+    to = mark?.to,
+    failed = mark?.failed ?? false;
+  useEffect(() => {
+    const v = view.current;
+    if (!v) return;
+    v.dispatch({
+      effects:
+        from == null || to == null
+          ? [setStep.of(null)]
+          : [setStep.of({ from, to, failed }), EditorView.scrollIntoView(from, { y: "center" })],
+    });
+  }, [from, to, failed, source]);
 
   return <div className="cm-host" ref={host} />;
 }

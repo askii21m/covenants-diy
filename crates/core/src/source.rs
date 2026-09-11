@@ -12,8 +12,11 @@ use std::fmt;
 
 use bitcoin::hex::DisplayHex;
 use bitcoin::ScriptBuf;
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
+use tsify::Tsify;
 
-use crate::asm::FromAsm;
+use crate::asm::from_asm_with_spans;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
@@ -85,11 +88,27 @@ pub fn refs(source: &str) -> Result<Vec<String>, SourceError> {
     Ok(names)
 }
 
+/// Where an instruction in the assembled script came from in the source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
+pub struct Span {
+    /// Byte offset of the instruction in the script.
+    pub offset: usize,
+    pub line: usize,
+    pub word: usize,
+    /// A push opcode and its bytes are one instruction from two words, and
+    /// the author may have put them on different lines.
+    pub end_line: usize,
+    pub end_word: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Assembled {
     pub script: ScriptBuf,
     /// What each reference resolved to, in order of first appearance.
     pub resolved: Vec<(String, Vec<u8>)>,
+    /// One per instruction, in script order.
+    pub spans: Vec<Span>,
 }
 
 /// What the assembler's failure means, said the way the editor should show
@@ -139,7 +158,7 @@ pub fn assemble(
             }
         }
     }
-    let script = ScriptBuf::from_asm(&asm).map_err(|e| {
+    let (script, raw) = from_asm_with_spans(&asm).map_err(|e| {
         // Everything is on line 0 of the flattened asm, so its word index
         // is the index into what we emitted. Past the end means the script
         // ran out of words, which belongs on the last one.
@@ -154,7 +173,28 @@ pub fn assemble(
             message: explain(&e.kind),
         }
     })?;
-    Ok(Assembled { script, resolved })
+    // The assembler saw one line, so its word indices are indices into
+    // `origin`, the same lookup the error path above makes.
+    let at = |w: usize| origin.get(w).copied().unwrap_or((0, 0));
+    let spans = raw
+        .iter()
+        .map(|s| {
+            let (line, word) = at(s.first.1);
+            let (end_line, end_word) = at(s.last.1);
+            Span {
+                offset: s.offset,
+                line,
+                word,
+                end_line,
+                end_word,
+            }
+        })
+        .collect();
+    Ok(Assembled {
+        script,
+        resolved,
+        spans,
+    })
 }
 
 #[cfg(test)]
@@ -214,5 +254,19 @@ mod tests {
         b.insert("x".to_string(), vec![0u8; 32]);
         let e = assemble("@x OP_CTV\nOP_NOPE", &b).unwrap_err();
         assert_eq!((e.line, e.word), (1, 0));
+    }
+
+    #[test]
+    fn spans_map_back_to_the_author_s_lines() {
+        let mut b = BTreeMap::new();
+        b.insert("a".to_string(), vec![0xab]);
+        let a = assemble("@a OP_DUP\n  OP_PUSHBYTES_1 # c\n01", &b).unwrap();
+        let got: Vec<_> = a
+            .spans
+            .iter()
+            .map(|s| (s.offset, s.line, s.word, s.end_line, s.end_word))
+            .collect();
+        // <ab> | OP_DUP | 01 01, the last from two words on two lines
+        assert_eq!(got, vec![(0, 0, 0, 0, 0), (2, 0, 1, 0, 1), (3, 1, 0, 2, 0)]);
     }
 }

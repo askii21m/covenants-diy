@@ -340,6 +340,9 @@ pub struct AssembleView {
     pub leaf_hash: Option<String>,
     pub enforcement: Option<EnforcementReport>,
     pub error: Option<SourcePosition>,
+    /// Where each instruction of `script` came from. Empty when assembly
+    /// failed, since there is then no script to index.
+    pub spans: Vec<source::Span>,
 }
 
 #[wasm_bindgen]
@@ -360,6 +363,7 @@ pub fn assemble(req: Ts<AssembleRequest>) -> Result<Ts<AssembleView>, JsError> {
                 asm: None,
                 leaf_hash: None,
                 enforcement: None,
+                spans: vec![],
                 error: Some(SourcePosition {
                     line: e.line,
                     word: e.word,
@@ -384,6 +388,7 @@ pub fn assemble(req: Ts<AssembleRequest>) -> Result<Ts<AssembleView>, JsError> {
             enforcement: Some(enforce::classify(&a.script, &req.ruleset)),
             script: Some(a.script.to_hex_string()),
             error: None,
+            spans: a.spans,
         },
         Err(e) => AssembleView {
             refs,
@@ -391,6 +396,7 @@ pub fn assemble(req: Ts<AssembleRequest>) -> Result<Ts<AssembleView>, JsError> {
             asm: None,
             leaf_hash: None,
             enforcement: None,
+            spans: vec![],
             error: Some(SourcePosition {
                 line: e.line,
                 word: e.word,

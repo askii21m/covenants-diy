@@ -997,6 +997,31 @@ export function wireType(edge: Edge, nodes: FlowNode[], edges: Edge[], depth = 0
   return findPort(n.data, "source", edge.sourceHandle ?? "")?.type ?? "any";
 }
 
+/** The node wired into a port, seen through any reroutes on the way.
+ *
+ *  Reads the wire `evaluate` reads. A port is meant to hold one, but a
+ *  hand-written document can land several, and the evaluator keeps the
+ *  last of them; taking the first here would run one script and point at
+ *  another one's source. An edge whose source is gone is skipped for the
+ *  same reason. */
+export function feeder(id: string, port: string, nodes: FlowNode[], edges: Edge[]): FlowNode | undefined {
+  let cur = id;
+  let handle: string | undefined = port;
+  for (let i = 0; i < 16; i++) {
+    let n: FlowNode | undefined;
+    for (const e of edges) {
+      if (e.target !== cur || (handle !== undefined && e.targetHandle !== handle)) continue;
+      const src = nodes.find((x) => x.id === e.source);
+      if (src) n = src;
+    }
+    if (!n) return undefined;
+    if (n.data.kind !== "reroute") return n;
+    cur = n.id;
+    handle = undefined;
+  }
+  return undefined;
+}
+
 // Autosave: every document, and which one is in front. Positions change
 // often while dragging, so writes are debounced, with a ceiling so a long
 // drag still checkpoints, and a flush when the page is hidden or unloaded

@@ -2,10 +2,12 @@
 // editor beside its derived values, an Execute gets the trace, a Template
 // or Transaction gets its decoded structure, anything else its outputs.
 
-import { Fragment, useRef } from "react";
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { KINDS, type Value } from "../registry";
-import { useStore, portValue } from "../store";
-import { Editor } from "../script/Editor";
+import { useStore, portValue, feeder } from "../store";
+import { Editor, wordRange } from "../script/Editor";
+import type { Refs } from "../script/complete";
+import type { StepMark } from "../script/marks";
 import { wasm, flagsOf } from "../engine";
 import type { DebugTrace, ParsedTx, AssembleView } from "../../pkg/covenants.js";
 import { COMMENT_COLORS } from "../nodes/CommentNode";
@@ -67,7 +69,7 @@ export function Detail() {
           view={computed?.extra as AssembleView | undefined}
         />
       ) : node.data.kind === "execute" ? (
-        <Trace trace={computed?.extra as DebugTrace | undefined} />
+        <Debugger id={node.id} trace={computed?.extra as DebugTrace | undefined} />
       ) : node.data.kind === "template" || node.data.kind === "transaction" ? (
         <TxDetail hex={String(computed?.outputs[node.data.kind === "template" ? "template" : "hex"] ?? "")} />
       ) : node.data.kind === "comment" ? (
@@ -81,16 +83,22 @@ export function Detail() {
 
 // --- script editor ----------------------------------------------------------
 
+/** A script's @names with what is wired into each, for the editor's marks. */
+function refsOf(id: string, view?: AssembleView): Refs[] {
+  return (view?.refs ?? []).map((r) => {
+    const v = portValue(id, `ref_${r}`);
+    return { name: r, value: v == null ? undefined : String(v) };
+  });
+}
+
 function ScriptEditor({ id, source, view }: { id: string; source: string; view?: AssembleView }) {
   const edges = useStore((s) => s.edges);
   const ratio = useStore((s) => s.splitRatio);
   const nodes = useStore((s) => s.nodes);
   const computed = useStore((s) => s.computed);
+  const refs = refsOf(id, view);
   const bound: Record<string, string> = {};
-  for (const r of view?.refs ?? []) {
-    const v = portValue(id, `ref_${r}`);
-    if (v != null) bound[r] = String(v);
-  }
+  for (const r of refs) if (r.value != null) bound[r.name] = r.value;
   const err = view?.error ? { line: view.error.line, word: view.error.word, message: view.error.message } : undefined;
 
   // Where this script goes: which taproot outputs hold it, which executions run it.
@@ -119,12 +127,7 @@ function ScriptEditor({ id, source, view }: { id: string; source: string; view?:
     <div className="two" style={{ ["--split" as string]: `${(ratio * 100).toFixed(2)}%` }}>
       <div className="ed">
         <div className="edwrap">
-          <Editor
-            id={id}
-            source={source}
-            error={err}
-            refs={(view?.refs ?? []).map((r) => ({ name: r, value: bound[r] }))}
-          />
+          <Editor id={id} source={source} error={err} refs={refs} />
         </div>
         <div className={`st ${err ? "err" : ""}`}>
           {err ? (
@@ -205,10 +208,24 @@ function ScriptEditor({ id, source, view }: { id: string; source: string; view?:
 
 // --- trace ----------------------------------------------------------------
 
-function Trace({ trace }: { trace?: DebugTrace }) {
+function Trace({
+  trace,
+  at,
+  pick,
+  onKey,
+}: {
+  trace?: DebugTrace;
+  at: number | null;
+  pick: (i: number) => void;
+  onKey: (e: KeyboardEvent<HTMLDivElement>) => void;
+}) {
+  const row = useRef<HTMLTableRowElement>(null);
+  useEffect(() => {
+    row.current?.scrollIntoView({ block: "nearest" });
+  }, [at]);
   if (!trace) return <div className="empty">Wire a script and a transaction to run.</div>;
   return (
-    <div className="trace">
+    <div className="trace" tabIndex={0} onKeyDown={onKey}>
       <table className="steps">
         <thead>
           <tr>
@@ -220,7 +237,12 @@ function Trace({ trace }: { trace?: DebugTrace }) {
         </thead>
         <tbody>
           {trace.steps.map((s) => (
-            <tr key={s.index} className={s.error ? "fail" : ""}>
+            <tr
+              key={s.index}
+              ref={s.index === at ? row : undefined}
+              className={`${s.error ? "fail" : ""} ${s.index === at ? "cur" : ""}`.trim()}
+              onClick={() => pick(s.index)}
+            >
               <td className="n">{s.index}</td>
               <td className="op">
                 {s.op.startsWith("OP_") ? <span className="mn">{s.op}</span> : short(s.op.replace(/[<>]/g, ""), 22)}
@@ -257,6 +279,104 @@ function Trace({ trace }: { trace?: DebugTrace }) {
           {trace.unpriced_ops > 0 ? " at least" : ""}
         </span>
         <span>final stack [{trace.final_stack.map((x) => short(x, 10)).join(", ")}]</span>
+        {trace.steps.length > 0 && (
+          <span className="hint">
+            <kbd>↑</kbd> <kbd>↓</kbd> step
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The trace beside the script that produced it, stepped together. The row
+ *  under the cursor and the word that ran are one instruction, joined by
+ *  the byte offset the assembler recorded for every word it emitted. */
+function Debugger({ id, trace }: { id: string; trace?: DebugTrace }) {
+  const nodes = useStore((s) => s.nodes);
+  const edges = useStore((s) => s.edges);
+  const computed = useStore((s) => s.computed);
+  const ratio = useStore((s) => s.splitRatio);
+  const leaf = feeder(id, "script", nodes, edges);
+  const view = leaf?.data.kind === "tapscript" ? (computed[leaf.id]?.extra as AssembleView | undefined) : undefined;
+  const source = leaf ? String(leaf.data.source ?? "") : "";
+  const steps = trace?.steps ?? [];
+  const failing = steps.findIndex((s) => s.error);
+
+  // The cursor opens on the failing step, since that is the question a
+  // rejected script asks, and on nothing otherwise, so a trace that passes
+  // reads exactly as it did before it could be stepped.
+  const [cur, setCur] = useState<number | null>(failing >= 0 ? failing : null);
+  useEffect(() => {
+    setCur(failing >= 0 ? failing : null);
+  }, [id, failing]);
+  const at = cur == null || steps.length === 0 ? null : Math.min(cur, steps.length - 1);
+
+  const step = at == null ? undefined : steps[at];
+  const span = step && view?.spans.find((s) => s.offset === step.position);
+  const mark: StepMark | null = span
+    ? {
+        from: wordRange(source, span.line, span.word).from,
+        to: wordRange(source, span.end_line, span.end_word).to,
+        failed: Boolean(step?.error),
+      }
+    : null;
+
+  const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    const k = e.key;
+    const steps_ = steps.length;
+    if (steps_ === 0) return;
+    if (k === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      setCur(null);
+      // Nothing here answers to the keys any more, so hand them back. The
+      // canvas ignores them while the panel holds the focus, and a second
+      // Escape now reaches it and clears the selection.
+      e.currentTarget.blur();
+      return;
+    }
+    if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(k)) return;
+    // The canvas listens on the window for Home and the rest. A key the
+    // trace has used must not also reframe the graph.
+    e.preventDefault();
+    e.stopPropagation();
+    // Held down, keys can arrive faster than a render, so each one moves
+    // from the step the one before it landed on rather than from the step
+    // this render was built with.
+    setCur((prev) => {
+      const last = steps_ - 1;
+      const now = prev == null ? null : Math.min(prev, last);
+      if (k === "ArrowDown") return now == null ? 0 : Math.min(now + 1, last);
+      if (k === "ArrowUp") return now == null ? last : Math.max(now - 1, 0);
+      if (k === "Home") return 0;
+      if (k === "End") return last;
+      return null;
+    });
+  };
+
+  const table = <Trace trace={trace} at={at} pick={setCur} onKey={onKey} />;
+  if (!leaf || !view) return table;
+  return (
+    <div className="two" style={{ ["--split" as string]: `${(ratio * 100).toFixed(2)}%` }}>
+      {table}
+      <Split />
+      <div className="ed">
+        <div className="edwrap">
+          <Editor id={leaf.id} source={source} readOnly refs={refsOf(leaf.id, view)} mark={mark} />
+        </div>
+        <div className="st">
+          <span>
+            <b>{String(leaf.data.name)}</b>
+          </span>
+          {step && span ? (
+            <span>
+              step {at! + 1} of {steps.length} · line {span.line + 1}
+            </span>
+          ) : (
+            <span>{steps.length ? `${steps.length} steps` : "not run"}</span>
+          )}
+        </div>
       </div>
     </div>
   );

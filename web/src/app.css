@@ -1187,6 +1187,15 @@ textarea {
   text-decoration: underline wavy var(--fail);
   text-underline-offset: 3px;
 }
+.cm-editor .cm-step {
+  background: var(--a2);
+  border-radius: var(--r-s);
+  box-shadow: 0 1px 0 var(--a);
+}
+.cm-editor .cm-step-fail {
+  background: var(--fail2);
+  box-shadow: 0 1px 0 var(--fail);
+}
 /* Tooltips live on the body so the panel cannot clip them; they sit above
    everything the app draws, including the node canvas. */
 /* CodeMirror's base theme sets a grey background and its own border on
@@ -1383,6 +1392,20 @@ textarea {
   padding: 7px 18px;
   border-bottom: 1px solid var(--line2);
   vertical-align: top;
+}
+.trace:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--a);
+}
+.trace tbody tr {
+  cursor: default;
+}
+.trace tr.cur td {
+  background: var(--sel);
+}
+.trace tr.cur td.n {
+  box-shadow: inset 3px 0 0 var(--a);
+  color: var(--a);
 }
 .trace tr.fail td {
   background: var(--fail2);
