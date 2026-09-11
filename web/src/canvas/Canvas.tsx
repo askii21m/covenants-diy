@@ -332,10 +332,15 @@ export function Canvas() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+      // Whatever has the focus owns its keys; the canvas only acts when
+      // nothing else does. The panel counts as a whole, not just the fields
+      // in it: the trace takes the focus to be stepped and is not a field,
+      // and x there would otherwise delete the node being traced.
+      const elsewhere =
+        t &&
+        (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable || t.closest(".detail") !== null);
       const mod = e.metaKey || e.ctrlKey;
-      // A field owns its own Escape; the canvas only acts when nothing is focused.
-      if (typing) return;
+      if (elsewhere) return;
       if (e.key === "Escape") {
         if (menu) closeMenu();
         else if (s().placing) s().setPlacing(null);
