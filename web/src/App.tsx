@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ReactFlowProvider } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useStore, savedSession, sanitizeFlow, backup, rawSession, type Flow } from "./store";
+import { useStore, sanitizeFlow, type Flow } from "./store";
 import { Canvas } from "./canvas/Canvas";
 import { ContextMenu, type MenuItem } from "./canvas/menus";
 import { viewActions } from "./canvas/Canvas";
@@ -9,7 +9,8 @@ import { Library } from "./panels/Library";
 import { Detail } from "./panels/Detail";
 import { InlineName } from "./nodes/InlineName";
 import { EXAMPLES, EXAMPLE_GROUPS } from "./examples";
-import { shortLink, decodeFlow, fetchShared, fragmentOnUrl, idOnUrl, type SharedDoc } from "./share";
+import { shortLink, decodeFlow, fragmentOnUrl } from "./share";
+import { boot, openShared } from "./boot";
 import { NETWORKS, FLAGS, PRESETS, flagsOf, nameOf, summaryOf, toggle } from "./engine";
 import { THEMES, apply as applyTheme, watchSystem, type Theme } from "./theme";
 
@@ -390,57 +391,14 @@ function Divider() {
 // document list before either has finished decoding.
 let booted = false;
 
-/** First load: a link if the URL carries one, otherwise the saved session,
- *  otherwise the vault example. ?fresh=1 ignores the session. */
+/** First load, and links pasted into a tab that is already open. */
 function Boot({ openExample, say }: { openExample: (key: string) => void; say: (t: string) => void }) {
-  const restore = useStore((s) => s.restoreSession);
-  const newDoc = useStore((s) => s.newDoc);
-
-  /** Open a shared graph and take it off the URL, so a reload does not
-   *  reopen it on top of whatever has been done since. */
-  const openShared = useCallback(
-    async (shared: SharedDoc | null) => {
-      history.replaceState(null, "", "/");
-      if (shared) newDoc(shared.name || "shared", shared.flow);
-      else say("That link does not carry a graph.");
-      return Boolean(shared);
-    },
-    [newDoc, say],
-  );
-
   useEffect(() => {
     // Idempotent: StrictMode runs effects twice in development.
     if (booted || useStore.getState().docs.length) return;
     booted = true;
-    // A link wins over everything: it is what the visitor asked for. A
-    // short one names a stored graph, a long one carries the graph itself.
-    const id = idOnUrl();
-    if (id) {
-      void fetchShared(id)
-        .then(openShared)
-        .then((ok) => {
-          if (!ok) openExample("vault");
-        });
-      return;
-    }
-    const fragment = fragmentOnUrl();
-    if (fragment) {
-      void decodeFlow(fragment)
-        .then(openShared)
-        .then((ok) => {
-          if (!ok) openExample("vault");
-        });
-      return;
-    }
-    // ?fresh=1 ignores the session, and the autosave is about to replace
-    // it, so keep a copy: it is the escape hatch for a session that breaks
-    // the app, not a way to destroy it.
-    const fresh = new URLSearchParams(location.search).get("fresh");
-    if (fresh) backup(rawSession());
-    const sess = fresh ? null : savedSession();
-    if (sess?.docs.length) restore(sess);
-    else openExample("vault");
-  }, [restore, openExample, openShared]);
+    void boot(openExample, say);
+  }, [openExample, say]);
 
   // A link pasted into the address bar of a tab that is already open only
   // changes the fragment: the page is never reloaded, so nothing above
@@ -448,11 +406,11 @@ function Boot({ openExample, say }: { openExample: (key: string) => void; say: (
   useEffect(() => {
     const onHash = () => {
       const f = fragmentOnUrl();
-      if (f) void decodeFlow(f).then(openShared);
+      if (f) void decodeFlow(f).then((shared) => openShared(shared, say));
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
-  }, [openShared]);
+  }, [say]);
 
   return null;
 }
