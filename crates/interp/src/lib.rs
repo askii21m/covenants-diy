@@ -595,11 +595,15 @@ impl Exec {
             None => return false,
         };
 
-        let lock_time =
-            match LockTime::from_consensus(u32::try_from(sequence).expect("sequence is u32")) {
-                Ok(lt) => lt,
-                Err(_) => return false,
-            };
+        // BIP-112 allows a five-byte operand, so it can exceed u32, and
+        // BIP-68 compares only the type flag and the low sixteen bits. The
+        // caller has already refused a negative operand and a set disable
+        // bit, so narrowing after the mask loses nothing the rule reads.
+        let mask: i64 = (1 << 22) | 0xffff;
+        let lock_time = match LockTime::from_consensus((sequence & mask) as u32) {
+            Ok(lt) => lt,
+            Err(_) => return false,
+        };
 
         match (lock_time, input_lock_time) {
             (LockTime::Blocks(h1), LockTime::Blocks(h2)) if h1 > h2 => return false,

@@ -1,11 +1,11 @@
 //! Operand bounds that used to stop the interpreter rather than the script:
-//! a PICK or ROLL index equal to the pool size. Bitcoin Core fails the
-//! script, and a tool that steps through scripts has to report the same
-//! failure, not vanish.
+//! a PICK or ROLL index equal to the pool size, and a five-byte CSV operand
+//! above u32::MAX. Bitcoin Core fails the script in both cases, and a tool
+//! that steps through scripts has to report the same failure, not vanish.
 
 use bitcoin::hashes::Hash;
 use bitcoin::opcodes::all::{
-    OP_DROP, OP_EQUALVERIFY, OP_PICK, OP_PUSHNUM_1, OP_PUSHNUM_2, OP_PUSHNUM_3, OP_ROLL,
+    OP_CSV, OP_DROP, OP_EQUALVERIFY, OP_PICK, OP_PUSHNUM_1, OP_PUSHNUM_2, OP_PUSHNUM_3, OP_ROLL,
 };
 use bitcoin::script::Builder;
 use bitcoin::taproot::{LeafVersion, TapLeafHash};
@@ -99,4 +99,21 @@ fn pick_and_roll_reach_the_bottom_of_the_pool() {
         .push_opcode(OP_EQUALVERIFY)
         .into_script();
     assert!(run(rolled, 0xffff_fffd).success);
+}
+
+/// 2^32 + 5 is a legal five-byte operand. BIP-68 reads only its type flag
+/// and low sixteen bits, so it asks for five blocks: met by an input at
+/// sequence 5, refused by one at 4.
+#[test]
+fn csv_reads_a_five_byte_operand_through_the_lock_time_mask() {
+    let csv = || {
+        Builder::new()
+            .push_int((1i64 << 32) + 5)
+            .push_opcode(OP_CSV)
+            .into_script()
+    };
+    assert!(run(csv(), 5).success);
+    let res = run(csv(), 4);
+    assert!(!res.success);
+    assert_eq!(res.error, Some(ExecError::UnsatisfiedLocktime));
 }
