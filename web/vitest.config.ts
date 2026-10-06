@@ -14,6 +14,7 @@ export const NODE_TESTS = [
   "test/trace.test.ts",
   "test/vault.test.ts",
   "test/ports.test.ts",
+  "test/presets.test.ts",
 ];
 
 export default defineConfig({

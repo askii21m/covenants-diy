@@ -84,7 +84,12 @@ export const PRESETS: Array<{
     on: ["vault", "ctv"],
   },
   { label: "mainnet today", hint: "none of them", group: "Running", on: [] },
-  { label: "Inquisition signet", hint: "CTV, CSFS, CAT and APO", group: "Running", on: ["ctv", "csfs", "cat", "apo"] },
+  {
+    label: "Inquisition signet",
+    hint: "CTV, CSFS, CAT, APO, OP_INTERNALKEY and OP_TEMPLATEHASH",
+    group: "Running",
+    on: ["ctv", "csfs", "cat", "apo", "internalkey", "templatehash"],
+  },
 ];
 
 /** Names that went out in permalinks before the switches existed. A stored
