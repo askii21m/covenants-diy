@@ -1025,8 +1025,10 @@ impl Exec {
             OP_PICK | OP_ROLL => {
                 // (xn ... x2 x1 x0 n - xn ... x2 x1 x0 xn)
                 // (xn ... x2 x1 x0 n - ... x2 x1 x0 xn)
+                self.stack.needn(2)?;
                 let x = self.stack.topnum(-1, self.opt.require_minimal)?;
-                if x < 0 || x >= self.stack.len() as i64 {
+                // n itself is not one of the items it can select from.
+                if x < 0 || x >= (self.stack.len() - 1) as i64 {
                     return Err(ExecError::InvalidStackOperation);
                 }
                 self.stack.pop().unwrap();
