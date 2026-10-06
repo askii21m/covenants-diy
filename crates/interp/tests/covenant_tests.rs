@@ -985,6 +985,43 @@ fn ccv_undefined_mode_succeeds_the_input() {
     assert!(res.success, "an undefined mode must succeed the input");
 }
 
+/// The reference reads the mode before it counts the stack, so a later
+/// deployment may define a mode that takes fewer than five items. Today
+/// that means an undefined mode succeeds on any stack that holds it.
+#[test]
+fn ccv_undefined_mode_does_not_need_five_items() {
+    let (tx, prevouts) = fixture(1, 1);
+    let script = Builder::new()
+        .push_int(9)
+        .push_opcode(OP_CCV)
+        .push_opcode(bitcoin::opcodes::all::OP_RETURN)
+        .into_script();
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert!(
+        res.success,
+        "an undefined mode must succeed on a short stack"
+    );
+}
+
+/// There is no mode to read on an empty stack, and that is the one depth
+/// the reference fails before deciding anything.
+#[test]
+fn ccv_fails_an_empty_stack_before_reading_a_mode() {
+    let (tx, prevouts) = fixture(1, 1);
+    let script = Builder::new().push_opcode(OP_CCV).into_script();
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert_eq!(res.error, Some(ExecError::InvalidStackOperation));
+}
+
+/// A defined mode keeps its five arguments.
+#[test]
+fn ccv_defined_mode_still_needs_five_items() {
+    let (tx, prevouts) = fixture(1, 1);
+    let script = Builder::new().push_int(1).push_opcode(OP_CCV).into_script();
+    let res = run_tapscript(script, vec![], tx, prevouts).unwrap();
+    assert_eq!(res.error, Some(ExecError::InvalidStackOperation));
+}
+
 /// Inactive, 0xbb is OP_SUCCESS187: the script passes without running.
 #[test]
 fn ccv_inactive_is_op_success() {

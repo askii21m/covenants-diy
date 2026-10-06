@@ -1499,19 +1499,21 @@ impl Exec {
                 // bound rather than as a figure a node would agree with.
                 self.unpriced_ops += 1;
                 self.stats.unpriced_ops = self.unpriced_ops;
-                self.stack.needn(5)?;
-                let mode_num = self.stack.topnum(-1, self.opt.require_minimal)?;
-                let taptree = self.stack.topstr(-2)?;
-                let pk = self.stack.topstr(-3)?;
-                let index_raw = self.stack.topstr(-4)?;
-                let data = self.stack.topstr(-5)?;
-
                 // An undefined mode is left for a later deployment to give
-                // meaning to, and succeeds the input outright.
+                // meaning to, and succeeds the input outright. The reference
+                // reads it before counting the stack, so a later deployment
+                // is free to take fewer than five items; only an empty
+                // stack fails here.
+                let mode_num = self.stack.topnum(-1, self.opt.require_minimal)?;
                 let Some(mode) = CcvMode::from_i64(mode_num) else {
                     self.succeed_now = true;
                     return Ok(());
                 };
+                self.stack.needn(5)?;
+                let taptree = self.stack.topstr(-2)?;
+                let pk = self.stack.topstr(-3)?;
+                let index_raw = self.stack.topstr(-4)?;
+                let data = self.stack.topstr(-5)?;
 
                 let index = if index_raw.is_empty() {
                     0i64
